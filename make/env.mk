@@ -1,0 +1,42 @@
+# Environment Setup Targets
+# ========================
+
+.PHONY: venv uv requirements clean
+
+venv: ## Create Python virtual environment
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		# must use non-venv python to create venv \
+		$(PYTHON) -m venv $(VENV_DIR); \
+		printf "$(GREEN)✅ Virtual environment created$(RESET)\n"; \
+	fi
+
+uv: venv ## Install uv package manager
+	@if [ ! -f "$(VENV_DIR)/bin/uv" ]; then \
+		# must use venv pip to install uv \
+		$(VENV_PIP) install uv; \
+		printf "$(GREEN)✅ uv installed$(RESET)\n"; \
+	fi
+
+requirements: venv uv ## Install runtime dependencies only
+	@$(VENV_UV) pip install --upgrade pip >/dev/null
+	@$(VENV_UV) pip install -r requirements.txt
+	@echo "✅ Runtime dependencies installed in $(VENV_DIR)"
+
+requirements-dev: venv uv ## Install all dependencies (runtime + dev/test) with uv
+	@$(VENV_UV) pip install --upgrade pip >/dev/null
+	@$(VENV_UV) pip install -r requirements-dev.txt
+	@echo "✅ All dependencies installed in $(VENV_DIR)"
+
+clean: ## Remove temporary and backup files
+	# Python caches
+	@find . -name "*.pyc" -delete 2>/dev/null || true
+	@find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+	# Test artifacts
+	@rm -rf .pytest_cache .coverage htmlcov .tox 2>/dev/null || true
+	# Build artifacts
+	@rm -rf dist build *.egg-info/ 2>/dev/null || true
+	# Python virtual environment
+	@rm -rf $(VENV_DIR) 2>/dev/null || true
+	# Misc artifacts
+	@rm -rf local scratch logs 2>/dev/null || true
+	@echo "✅ Cleanup completed"

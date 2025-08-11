@@ -1,0 +1,9 @@
+# Lint Targets
+# ============
+
+.PHONY: lint
+
+lint: venv uv requirements-dev ## Run linting and auto-format code
+	@$(VENV_PYTHON) -m ruff format $(PYTHON_SCRIPT) tests/
+	@$(VENV_PYTHON) -m ruff check --fix $(PYTHON_SCRIPT) tests/
+	@printf "$(GREEN)✅ Linting and formatting completed$(RESET)\n"

@@ -1,0 +1,81 @@
+# GCM Test Plan
+
+This document maps 1:1 to unit tests in the codebase. Each test item corresponds to a specific test method for the project. Validation is done by a human, checking that implementation meets intent of the test, not just technically the literal interpretation of the description.
+
+## CONFIG - Configuration Management Tests
+
+| Test ID | Description | Validated |
+|---------|-------------|-----------|
+| CONFIG-01 | Loading config works with default values when no config file exists | |
+| CONFIG-02 | Loading config works when config file exists | |
+| CONFIG-03 | Loading config uses defaults when config file does not exist | |
+| CONFIG-04 | Loading config fails gracefully with invalid YAML | |
+| CONFIG-05 | Config merging preserves default values for unspecified keys | |
+| CONFIG-06 | Getting provider config returns correct values | |
+| CONFIG-07 | Getting config for unknown provider returns empty dict | |
+| CONFIG-08 | Config file discovery finds files in standard locations | |
+| CONFIG-09 | VPN command configuration works correctly | |
+| CONFIG-10 | Behavior configuration options work correctly | |
+
+## GIT - Git Repository Operations Tests
+
+| Test ID | Description | Validated |
+|---------|-------------|-----------|
+| GIT-01 | Repository initialization succeeds in valid git repository | |
+| GIT-02 | Repository initialization fails in non-git directory | |
+| GIT-03 | Trunk branch detection works from origin/HEAD | |
+| GIT-04 | Trunk branch detection falls back to common names | |
+| GIT-05 | Trunk branch detection fails when no common branches exist | |
+| GIT-06 | Remote detection parses git remote output correctly | |
+| GIT-07 | Provider detection identifies GitHub correctly | |
+| GIT-08 | Provider detection identifies GitLab correctly | |
+| GIT-09 | Provider detection returns None for unknown providers | |
+| GIT-10 | Clean working tree detection works when tree is clean | |
+| GIT-11 | Clean working tree detection works when tree is dirty | |
+| GIT-12 | Branch checkout succeeds with valid branch | |
+| GIT-13 | Branch checkout fails with invalid branch | |
+| GIT-14 | Merged branch detection finds correct branches | |
+| GIT-15 | Gone branch detection finds branches with deleted upstreams | |
+| GIT-16 | Git commands are properly logged for debugging | |
+| GIT-17 | Hard reset and clean executes correct git commands | |
+
+## MAIN - Main Workflow Tests
+
+| Test ID | Description | Validated |
+|---------|-------------|-----------|
+| MAIN-01 | GCM initializes correctly with config and repository | |
+| MAIN-02 | VPN connection succeeds when command is configured | |
+| MAIN-03 | VPN connection failure is handled gracefully | |
+| MAIN-04 | VPN connection is skipped in dry-run mode | |
+| MAIN-05 | Origin push is disabled when forks are detected | |
+| MAIN-06 | Origin push is not disabled when no forks are detected | |
+| MAIN-07 | Trunk checkout and update succeeds normally | |
+| MAIN-08 | Trunk checkout handles failure with user confirmation for reset | |
+| MAIN-09 | Trunk checkout fails when user declines reset | |
+| MAIN-10 | Branch cleanup removes both merged and gone branches | |
+| MAIN-11 | Fork synchronization pushes trunk to configured forks | |
+| MAIN-12 | Fork synchronization skips when fork remote doesn't exist | |
+| MAIN-13 | Dry-run mode shows actions without executing them | |
+| MAIN-14 | Error handling works when no origin remote exists | |
+| MAIN-15 | Parallel operations are controlled by configuration | |
+| MAIN-16 | Command line interface parses arguments correctly | |
+
+## Test Execution
+
+Run all tests with:
+```bash
+make test
+```
+
+Run specific test categories:
+```bash
+pytest tests/unit/test_config.py      # Configuration tests only
+pytest tests/unit/test_git_repository.py  # Git operations tests only
+pytest tests/unit/test_gcm_main.py    # Main workflow tests only
+```
+
+Run with coverage:
+```bash
+make coverage
+```
+

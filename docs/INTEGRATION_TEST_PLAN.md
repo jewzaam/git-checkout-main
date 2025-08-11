@@ -1,0 +1,180 @@
+# GCM Integration Test Plan
+
+This document outlines integration tests for the GCM tool using real git repositories and scenarios. These tests validate end-to-end functionality against actual git operations.
+
+## Test Environment Setup
+
+### Prerequisites
+- Python 3.8+
+- Git 2.0+
+- Network access for git operations
+- Temporary directory for test repositories
+
+### Test Repository Creation
+Integration tests create temporary git repositories with controlled states to test various scenarios.
+
+## Test Categories
+
+## REPO - Repository State Tests
+
+| Test ID | Description | Setup | Expected Result |
+|---------|-------------|--------|-----------------|
+| REPO-01 | Clean repository with origin/HEAD pointing to main | Fresh repo, main branch, clean working tree | Successfully processes main branch |
+| REPO-02 | Clean repository with origin/HEAD pointing to master | Fresh repo, master branch, clean working tree | Successfully processes master branch |
+| REPO-03 | Repository with dirty working tree | Uncommitted changes in working directory | Prompts for reset or fails gracefully |
+| REPO-04 | Repository in detached HEAD state | Checkout specific commit (detached HEAD) | Handles detached state, checks out trunk |
+| REPO-05 | Repository with no origin/HEAD set | Remove origin/HEAD reference | Falls back to common branch detection |
+| REPO-06 | Repository with no common trunk branches | Only feature branches, no main/master | Fails with clear error message |
+
+## BRANCH - Branch Management Tests  
+
+| Test ID | Description | Setup | Expected Result |
+|---------|-------------|--------|-----------------|
+| BRANCH-01 | Local branches merged to trunk | Create feature branches, merge to main | Deletes merged local branches |
+| BRANCH-02 | Local branches with gone remotes | Delete remote branches, keep local | Deletes local branches with gone remotes |
+| BRANCH-03 | Local branches not merged | Create unmerged feature branches | Preserves unmerged branches |
+| BRANCH-04 | Mixed branch states | Some merged, some unmerged, some gone | Correctly categorizes and handles each |
+| BRANCH-05 | Current branch is feature branch | Currently on feature branch when running GCM | Switches to trunk, then cleans up |
+
+## REMOTE - Remote Configuration Tests
+
+| Test ID | Description | Setup | Expected Result |
+|---------|-------------|--------|-----------------|
+| REMOTE-01 | Origin only configuration | Single origin remote | Works with origin only |
+| REMOTE-02 | Origin + GitHub fork | Origin + configured GitHub fork remote | Disables origin push, syncs to fork |
+| REMOTE-03 | Origin + GitLab fork | Origin + configured GitLab fork remote | Disables origin push, syncs to fork |
+| REMOTE-04 | Multiple fork remotes | Origin + GitHub + GitLab forks | Handles multiple forks correctly |
+| REMOTE-05 | Missing fork remotes with -m flag | Configure forks but remotes don't exist | Reports missing remotes (creation not implemented) |
+| REMOTE-06 | Invalid remote URLs | Corrupted or inaccessible remote URLs | Handles network errors gracefully |
+
+## CONFLICT - Conflict and Error Scenarios
+
+| Test ID | Description | Setup | Expected Result |
+|---------|-------------|--------|-----------------|
+| CONFLICT-01 | Merge conflicts during pull | Create conflicting changes in trunk | Offers reset option or fails gracefully |
+| CONFLICT-02 | Local commits ahead of remote | Unpushed commits on trunk branch | Handles properly or prompts for action |
+| CONFLICT-03 | Permission denied on remote operations | Simulate permission failures | Reports errors clearly |
+| CONFLICT-04 | Network timeouts | Simulate network connectivity issues | Handles timeouts gracefully |
+| CONFLICT-05 | Corrupted git repository | Corrupt .git directory | Detects and reports corruption |
+
+## WORKFLOW - End-to-End Workflow Tests
+
+| Test ID | Description | Setup | Expected Result |
+|---------|-------------|--------|-----------------|
+| WORKFLOW-01 | Complete workflow - clean repo | Ideal conditions, clean repo with forks | Full successful workflow execution |
+| WORKFLOW-02 | Complete workflow - dirty repo with reset | Dirty repo, user confirms reset | Resets, completes workflow |
+| WORKFLOW-03 | Complete workflow - dirty repo no reset | Dirty repo, user declines reset | Exits cleanly without changes |
+| WORKFLOW-04 | Dry-run mode | Various repository states | Shows actions without executing |
+| WORKFLOW-05 | Make remotes mode (-m flag) | Repository without configured forks | Reports what forks would be created |
+
+## CONFIG - Configuration Integration Tests
+
+| Test ID | Description | Setup | Expected Result |
+|---------|-------------|--------|-----------------|
+| CONFIG-01 | Local .gcm.yaml configuration | Project-specific config file | Uses local configuration |
+| CONFIG-02 | Global ~/.gcm.yaml configuration | User-wide config file | Uses global configuration |
+| CONFIG-03 | No configuration file | Default behavior | Uses built-in defaults |
+| CONFIG-04 | Invalid configuration file | Malformed YAML config | Reports config error clearly |
+| CONFIG-05 | Multiple config files | Both local and global configs | Local config takes precedence |
+
+## PROVIDER - Git Provider Integration Tests
+
+| Test ID | Description | Setup | Expected Result |
+|---------|-------------|--------|-----------------|
+| PROVIDER-01 | GitHub repository detection | Repository with github.com remote | Correctly identifies as GitHub |
+| PROVIDER-02 | GitLab repository detection | Repository with gitlab remote URL | Correctly identifies as GitLab |
+| PROVIDER-03 | Unknown provider | Repository with other git hosting | Handles unknown provider gracefully |
+| PROVIDER-04 | Multiple providers | Remotes from different providers | Handles mixed providers correctly |
+
+## Implementation Framework
+
+### Test Structure
+```
+tests/
+├── integration/
+│   ├── __init__.py
+│   ├── conftest.py              # pytest fixtures for repo setup
+│   ├── test_repository_states.py
+│   ├── test_branch_management.py
+│   ├── test_remote_operations.py
+│   ├── test_conflict_scenarios.py
+│   ├── test_end_to_end_workflows.py
+│   ├── test_configuration.py
+│   └── test_provider_detection.py
+└── helpers/
+    ├── __init__.py
+    ├── git_repo_factory.py     # Create test repositories
+    ├── scenario_builder.py     # Build specific test scenarios
+    └── assertions.py           # Custom assertion helpers
+```
+
+### Test Repository Factory
+```python
+class GitRepoFactory:
+    def create_clean_repo(self, trunk_branch='main') -> Path
+    def create_dirty_repo(self, trunk_branch='main') -> Path  
+    def create_repo_with_branches(self, merged=[], unmerged=[], gone=[]) -> Path
+    def create_repo_with_remotes(self, remotes: Dict[str, str]) -> Path
+    def create_conflicted_repo(self) -> Path
+```
+
+### Test Execution
+```bash
+# Run all integration tests
+make test-integration
+
+# Run specific test category
+pytest tests/integration/test_repository_states.py
+
+# Run with verbose output
+make test-integration ARGS="-v -s"
+
+# Run single test
+pytest tests/integration/test_repository_states.py::test_clean_repo_main_branch
+```
+
+### Test Environment Isolation
+- Each test creates temporary git repositories
+- Tests run in isolated temporary directories
+- Clean up after each test (or on failure for debugging)
+- No network dependencies (use local bare repositories as "remotes")
+
+### Continuous Integration
+- Integration tests run in CI/CD pipeline
+- Test against multiple Python versions
+- Test against multiple Git versions
+- Include in coverage reporting
+
+## Validation Criteria
+
+Each integration test validates:
+1. **Correct Exit Code**: 0 for success, 1 for expected failures
+2. **Expected Git State**: Repository in correct final state
+3. **Correct Logging**: Appropriate log messages for operations
+4. **File System State**: Proper cleanup, no leftover files
+5. **Network Operations**: Appropriate remote operations performed
+
+## Manual Testing Scenarios
+
+For scenarios difficult to automate:
+
+### Real Repository Testing
+1. Test against actual GitHub/GitLab repositories (with permission)
+2. Test with various repository sizes and branch counts
+3. Test with real network conditions and timeouts
+4. Test with actual VPN connections (if applicable)
+
+### Performance Testing
+1. Large repositories (1000+ branches)
+2. Repositories with large history
+3. Multiple concurrent operations
+4. Memory usage under load
+
+## Test Data Management
+
+Integration tests use:
+- **Deterministic**: Reproducible repository states
+- **Isolated**: No shared state between tests
+- **Realistic**: Mirror real-world git scenarios
+- **Fast**: Minimize test execution time
+- **Debuggable**: Easy to reproduce failures manually

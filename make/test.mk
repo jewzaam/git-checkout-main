@@ -1,0 +1,26 @@
+# Test Targets
+# ============
+
+.PHONY: test test-unit test-integration test-all coverage
+
+test: test-unit ## Run unit tests (default)
+
+test-unit: requirements-dev ## Run unit tests only
+	@printf "$(BLUE)Running unit tests...$(RESET)\n"
+	@$(VENV_PYTHON) -m pytest tests/unit/ -v $(ARGS)
+	@printf "$(GREEN)✅ Unit tests completed$(RESET)\n"
+
+test-integration: requirements-dev ## Run integration tests only
+	@printf "$(BLUE)Running integration tests...$(RESET)\n"
+	@$(VENV_PYTHON) -m pytest tests/integration/ -v $(ARGS)
+	@printf "$(GREEN)✅ Integration tests completed$(RESET)\n"
+
+test-all: requirements-dev ## Run all tests (unit + integration)
+	@printf "$(BLUE)Running all tests...$(RESET)\n"
+	@$(VENV_PYTHON) -m pytest tests/ -v $(ARGS)
+	@printf "$(GREEN)✅ All tests completed$(RESET)\n"
+
+coverage: requirements-dev ## Run tests with coverage report
+	@printf "$(BLUE)Running tests with coverage...$(RESET)\n"
+	@$(VENV_PYTHON) -m pytest tests/ --cov=gcm --cov-report=html --cov-report=term $(ARGS)
+	@printf "$(GREEN)✅ Coverage report generated$(RESET)\n"
