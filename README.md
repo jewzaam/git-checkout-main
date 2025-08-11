@@ -169,7 +169,3 @@ The original bash script has been preserved in `reference/gcm`. Key improvements
 3. Format code: `make format`
 4. Run linting: `make lint`
 5. Add attribution: "Assisted-by: Cursor (Claude Sonnet 4)" to commits
-
-## License
-
-This project follows the same license as the original script.
