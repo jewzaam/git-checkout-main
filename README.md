@@ -11,7 +11,7 @@ A portable Python rewrite of the original git workflow automation tool for manag
 - **Multi-Provider Support**: Works with GitHub, GitLab, and other git providers
 - **Fork Management**: Automatically manages user forks and upstream repositories
 - **Branch Cleanup**: Removes merged and gone branches from local and remote repositories
-- **VPN Integration**: Optional VPN connection for provider-specific requirements
+
 - **Safety Features**: Dry-run mode and confirmation prompts for destructive operations
 - **Parallel Operations**: Optimized performance with concurrent git operations
 
@@ -41,11 +41,9 @@ providers:
   github:
     username: "your-github-username"
     fork_remote: "your-github-username"
-    vpn_command: null
   gitlab:
     username: "your-gitlab-username"
     fork_remote: "your-gitlab-username"
-    vpn_command: "vpn-up"
 
 behavior:
   confirm_destructive: true
@@ -79,7 +77,7 @@ Custom configuration file:
 ## What GCM Does
 
 1. **Detects Repository Info**: Automatically identifies the trunk branch and git provider
-2. **Connects VPN**: Optionally connects VPN if configured for the provider
+
 3. **Sets Up Remotes**: Creates fork remotes if requested with `-m` flag
 4. **Configures Push URLs**: Disables push to upstream when forks are detected
 5. **Updates Trunk**: Checks out and pulls latest changes from the trunk branch

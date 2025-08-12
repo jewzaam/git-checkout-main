@@ -40,8 +40,8 @@ class GCMConfig:
 
     DEFAULT_CONFIG = {
         "providers": {
-            "github": {"username": None, "fork_remote": None, "vpn_command": None},
-            "gitlab": {"username": None, "fork_remote": None, "vpn_command": None},
+            "github": {"username": None, "fork_remote": None},
+            "gitlab": {"username": None, "fork_remote": None},
         },
         "remotes": {"upstream": "origin"},
         "branches": {"trunk_aliases": ["main", "master", "trunk"]},
@@ -105,10 +105,6 @@ class GCMConfig:
     def get_fork_remote(self, provider: str) -> Optional[str]:
         """Get fork remote name for a provider"""
         return self.get_provider_config(provider).get("fork_remote")
-
-    def get_vpn_command(self, provider: str) -> Optional[str]:
-        """Get VPN command for a provider"""
-        return self.get_provider_config(provider).get("vpn_command")
 
 
 class GitRepository:
@@ -377,10 +373,6 @@ class GCM:
             if not provider:
                 self.logger.warning(f"Unknown provider for {origin_url}")
 
-            # Connect VPN if needed
-            if provider:
-                self._ensure_vpn(provider, dry_run)
-
             # Get trunk branch
             trunk_branch = self.repo.get_trunk_branch()
             self.logger.info(f"Trunk branch: {trunk_branch}")
@@ -419,17 +411,6 @@ class GCM:
         except Exception as e:
             self.logger.error(f"GCM workflow failed: {e}")
             return 1
-
-    def _ensure_vpn(self, provider: str, dry_run: bool) -> None:
-        """Ensure VPN is connected if required"""
-        vpn_command = self.config.get_vpn_command(provider)
-        if vpn_command:
-            self.logger.info(f"Connecting VPN for {provider}...")
-            if not dry_run:
-                try:
-                    subprocess.run(vpn_command, shell=True, check=True)
-                except subprocess.CalledProcessError as e:
-                    self.logger.warning(f"VPN connection failed: {e}")
 
     def _setup_fork_remotes(
         self, provider: str, remotes: Dict[str, str], dry_run: bool
