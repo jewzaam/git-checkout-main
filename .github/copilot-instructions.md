@@ -58,7 +58,7 @@ ALWAYS run these validation steps after making any code changes:
 ### Manual Testing Scenarios
 After making changes to core functionality, test these scenarios:
 
-- **Configuration loading**: Test with `.gcm.yaml.example` copied to `.gcm.yaml`
+- **Configuration loading**: Test with `./gcm.py --config .gcm.yaml.example --dry-run`
 - **Help system**: `./gcm.py --help` should show all options
 - **Dry-run mode**: `./gcm.py --dry-run` should execute without making changes (will fail with "Could not determine trunk branch" if not in a proper git repo, which is expected)
 - **Invalid config**: Test with malformed YAML to ensure proper error handling (creates helpful error messages)
@@ -115,12 +115,14 @@ Run this complete validation after any code changes:
 - **pytest-cov>=4.0.0** for coverage
 
 ### Configuration
-The tool uses YAML configuration files searched in this order:
-1. `.gcm.yaml` (local repository)
-2. `~/.gcm.yaml` (user home)  
-3. `~/.config/gcm.yaml` (XDG config)
+The tool supports configuration via:
+- **CLI argument**: `--config /path/to/config.yaml` (recommended for testing)
+- **Auto-discovery** in this order:
+  1. `.gcm.yaml` (local repository - **not recommended**, now in `.gitignore`)
+  2. `~/.gcm.yaml` (user home)  
+  3. `~/.config/gcm.yaml` (XDG config)
 
-Use `.gcm.yaml.example` as a template.
+Use `.gcm.yaml.example` as a template. For development/testing, use `--config .gcm.yaml.example` to avoid creating local config files.
 
 ### Make Targets Reference
 Run `make help` to see all available targets:
