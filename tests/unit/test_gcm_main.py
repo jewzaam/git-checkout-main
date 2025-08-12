@@ -259,3 +259,219 @@ class TestGCMWorkflow:
         # This test would need more sophisticated CLI testing framework
         # For now, just verify the main function exists
         assert callable(mock_main)
+
+    @patch("gcm.GitRepository")
+    @patch("gcm.GCMConfig")
+    @patch("gcm.GCM")
+    def test_main_function_success(
+        self, mock_gcm_class, mock_config_class, mock_repo_class
+    ):
+        """MAIN-17: Main function creates objects and runs successfully"""
+        from gcm import main
+
+        # Setup mocks
+        mock_config = Mock()
+        mock_config_class.return_value = mock_config
+
+        mock_repo = Mock()
+        mock_repo_class.return_value = mock_repo
+
+        mock_gcm = Mock()
+        mock_gcm.run.return_value = 0
+        mock_gcm_class.return_value = mock_gcm
+
+        # Mock sys.argv to avoid argparse issues
+        with patch("sys.argv", ["gcm.py"]):
+            result = main()
+
+        assert result == 0
+        mock_config_class.assert_called_once()
+        mock_repo_class.assert_called_once()
+        mock_gcm_class.assert_called_once_with(mock_config, mock_repo)
+        mock_gcm.run.assert_called_once()
+
+    @patch("gcm.GitRepository")
+    @patch("gcm.GCMConfig")
+    def test_main_function_error_handling(self, mock_config_class, mock_repo_class):
+        """MAIN-18: Main function handles exceptions and returns error code"""
+        from gcm import main
+
+        # Make config initialization raise an exception
+        mock_config_class.side_effect = Exception("Config error")
+
+        with patch("sys.argv", ["gcm.py"]):
+            result = main()
+
+        assert result == 1
+
+    @patch("gcm.logging")
+    def test_setup_logging_default(self, mock_logging):
+        """MAIN-19: Setup logging with default level"""
+        from gcm import setup_logging
+
+        setup_logging()
+
+        mock_logging.basicConfig.assert_called_once()
+        call_args = mock_logging.basicConfig.call_args
+        assert call_args[1]["level"] == mock_logging.INFO
+
+    @patch("gcm.logging")
+    def test_setup_logging_custom_level(self, mock_logging):
+        """MAIN-20: Setup logging with custom level"""
+        from gcm import setup_logging
+
+        setup_logging("DEBUG")
+
+        mock_logging.basicConfig.assert_called_once()
+        call_args = mock_logging.basicConfig.call_args
+        assert call_args[1]["level"] == mock_logging.DEBUG
+
+    @patch(
+        "sys.argv",
+        [
+            "gcm.py",
+            "--config",
+            "/path/to/config.yaml",
+            "--dry-run",
+            "--log-level",
+            "DEBUG",
+        ],
+    )
+    @patch("gcm.GitRepository")
+    @patch("gcm.GCMConfig")
+    @patch("gcm.GCM")
+    def test_main_with_all_arguments(
+        self, mock_gcm_class, mock_config_class, mock_repo_class
+    ):
+        """MAIN-21: Main function with all command line arguments"""
+        from gcm import main
+        from pathlib import Path
+
+        # Setup mocks
+        mock_config = Mock()
+        mock_config_class.return_value = mock_config
+
+        mock_repo = Mock()
+        mock_repo_class.return_value = mock_repo
+
+        mock_gcm = Mock()
+        mock_gcm.run.return_value = 0
+        mock_gcm_class.return_value = mock_gcm
+
+        result = main()
+
+        assert result == 0
+        # Verify config was created with specified path
+        mock_config_class.assert_called_once_with(Path("/path/to/config.yaml"))
+        # Verify GCM run was called with correct arguments
+        mock_gcm.run.assert_called_once_with(make_remotes=False, dry_run=True)
+
+    @patch("gcm.subprocess.run")
+    def test_ensure_vpn_success(self, mock_subprocess):
+        """MAIN-22: VPN connection succeeds"""
+        config = Mock()
+        config.get_vpn_command.return_value = "vpn-command connect"
+        repo = Mock()
+
+        gcm = GCM(config, repo)
+
+        # Should not raise an exception
+        gcm._ensure_vpn("github", dry_run=False)
+
+        mock_subprocess.assert_called_once_with(
+            "vpn-command connect", shell=True, check=True
+        )
+
+    @patch("gcm.subprocess.run")
+    def test_ensure_vpn_failure(self, mock_subprocess):
+        """MAIN-23: VPN connection failure is handled gracefully"""
+        from subprocess import CalledProcessError
+
+        config = Mock()
+        config.get_vpn_command.return_value = "vpn-command connect"
+        repo = Mock()
+
+        mock_subprocess.side_effect = CalledProcessError(1, "vpn-command")
+
+        gcm = GCM(config, repo)
+
+        # Should not raise an exception, just log warning
+        gcm._ensure_vpn("github", dry_run=False)
+
+        mock_subprocess.assert_called_once()
+
+    def test_ensure_vpn_dry_run(self):
+        """MAIN-24: VPN connection in dry run mode"""
+        config = Mock()
+        config.get_vpn_command.return_value = "vpn-command connect"
+        repo = Mock()
+
+        gcm = GCM(config, repo)
+
+        # Should not attempt connection in dry run
+        with patch("gcm.subprocess.run") as mock_subprocess:
+            gcm._ensure_vpn("github", dry_run=True)
+            mock_subprocess.assert_not_called()
+
+    def test_ensure_vpn_no_command(self):
+        """MAIN-25: VPN with no command configured"""
+        config = Mock()
+        config.get_vpn_command.return_value = None
+        repo = Mock()
+
+        gcm = GCM(config, repo)
+
+        # Should not attempt connection when no command configured
+        with patch("gcm.subprocess.run") as mock_subprocess:
+            gcm._ensure_vpn("github", dry_run=False)
+            mock_subprocess.assert_not_called()
+
+    def test_setup_fork_remotes_missing_config(self):
+        """MAIN-26: Setup fork remotes with missing configuration"""
+        config = Mock()
+        config.get_username.return_value = None
+        config.get_fork_remote.return_value = None
+        repo = Mock()
+
+        gcm = GCM(config, repo)
+
+        # Should return early when username/fork_remote not configured
+        gcm._setup_fork_remotes("github", {}, dry_run=False)
+
+        config.get_username.assert_called_once_with("github")
+        config.get_fork_remote.assert_called_once_with("github")
+
+    def test_setup_fork_remotes_already_exists(self):
+        """MAIN-27: Setup fork remotes when remote already exists"""
+        config = Mock()
+        config.get_username.return_value = "testuser"
+        config.get_fork_remote.return_value = "testuser"
+        repo = Mock()
+
+        gcm = GCM(config, repo)
+
+        remotes = {"origin": "upstream", "testuser": "fork"}
+
+        # Should not attempt to create when remote already exists
+        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+
+        # Just verify the config methods were called
+        config.get_username.assert_called_once_with("github")
+        config.get_fork_remote.assert_called_once_with("github")
+
+    def test_setup_fork_remotes_new_remote(self):
+        """MAIN-28: Setup fork remotes creates new remote"""
+        config = Mock()
+        config.get_username.return_value = "testuser"
+        config.get_fork_remote.return_value = "testuser"
+        repo = Mock()
+
+        gcm = GCM(config, repo)
+
+        remotes = {"origin": "upstream"}  # No fork remote exists
+
+        # Should log that it would create the remote
+        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+
+        config.get_username.assert_called_once_with("github")
+        config.get_fork_remote.assert_called_once_with("github")

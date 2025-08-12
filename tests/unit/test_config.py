@@ -149,3 +149,113 @@ class TestGCMConfig:
             assert config.config["behavior"]["parallel_operations"] is False
         finally:
             config_path.unlink()
+
+    def test_get_username_with_provider(self):
+        """CONFIG-11: Get username for configured provider"""
+        test_config = {"providers": {"github": {"username": "testuser"}}}
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(test_config, f)
+            config_path = Path(f.name)
+
+        try:
+            config = GCMConfig(config_path)
+            username = config.get_username("github")
+            assert username == "testuser"
+        finally:
+            config_path.unlink()
+
+    def test_get_username_with_unknown_provider(self):
+        """CONFIG-12: Get username for unknown provider returns None"""
+        config = GCMConfig()
+        username = config.get_username("unknown")
+        assert username is None
+
+    def test_get_fork_remote_with_provider(self):
+        """CONFIG-13: Get fork remote for configured provider"""
+        test_config = {"providers": {"github": {"fork_remote": "testuser"}}}
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(test_config, f)
+            config_path = Path(f.name)
+
+        try:
+            config = GCMConfig(config_path)
+            fork_remote = config.get_fork_remote("github")
+            assert fork_remote == "testuser"
+        finally:
+            config_path.unlink()
+
+    def test_get_fork_remote_with_unknown_provider(self):
+        """CONFIG-14: Get fork remote for unknown provider returns None"""
+        config = GCMConfig()
+        fork_remote = config.get_fork_remote("unknown")
+        assert fork_remote is None
+
+    def test_get_vpn_command_with_provider(self):
+        """CONFIG-15: Get VPN command for configured provider"""
+        test_config = {"providers": {"github": {"vpn_command": "vpn connect github"}}}
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(test_config, f)
+            config_path = Path(f.name)
+
+        try:
+            config = GCMConfig(config_path)
+            vpn_command = config.get_vpn_command("github")
+            assert vpn_command == "vpn connect github"
+        finally:
+            config_path.unlink()
+
+    def test_get_vpn_command_with_unknown_provider(self):
+        """CONFIG-16: Get VPN command for unknown provider returns None"""
+        config = GCMConfig()
+        vpn_command = config.get_vpn_command("unknown")
+        assert vpn_command is None
+
+    def test_config_file_discovery_yml_extension(self):
+        """CONFIG-17: Config file discovery with .yml extension"""
+        test_config = {"providers": {"github": {"username": "testuser"}}}
+
+        # Test .yml extension instead of .yaml
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            yaml.dump(test_config, f)
+            config_path = Path(f.name)
+
+        try:
+            # Patch the _find_config_file to return our test file
+            with patch.object(GCMConfig, "_find_config_file", return_value=config_path):
+                config = GCMConfig()
+                assert config.get_username("github") == "testuser"
+        finally:
+            config_path.unlink()
+
+    def test_merge_config_deep_nesting(self):
+        """CONFIG-18: Deep config merge with nested dictionaries"""
+        test_config = {
+            "providers": {
+                "github": {"username": "testuser"},
+                "gitlab": {"username": "gitlabuser", "vpn_command": "vpn gitlab"},
+            },
+            "behavior": {"confirm_destructive": False},
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(test_config, f)
+            config_path = Path(f.name)
+
+        try:
+            config = GCMConfig(config_path)
+            # Should preserve default values while overlaying user config
+            assert config.config["providers"]["github"]["username"] == "testuser"
+            assert (
+                config.config["providers"]["github"]["fork_remote"] is None
+            )  # Default
+            assert config.config["providers"]["gitlab"]["username"] == "gitlabuser"
+            assert config.config["providers"]["gitlab"]["vpn_command"] == "vpn gitlab"
+            assert config.config["behavior"]["confirm_destructive"] is False
+            assert (
+                config.config["behavior"]["parallel_operations"] is True
+            )  # Default preserved
+        finally:
+            config_path.unlink()
