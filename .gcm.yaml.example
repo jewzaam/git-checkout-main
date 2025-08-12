@@ -6,11 +6,9 @@ providers:
   github:
     username: "your-github-username"
     fork_remote: "your-github-username"
-    vpn_command: null
   gitlab:
     username: "your-gitlab-username"
     fork_remote: "your-gitlab-username"
-    vpn_command: "vpn-up"
 
 remotes:
   upstream: "origin"

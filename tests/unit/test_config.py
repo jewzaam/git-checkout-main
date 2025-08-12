@@ -96,7 +96,6 @@ class TestGCMConfig:
         assert isinstance(github_config, dict)
         assert "username" in github_config
         assert "fork_remote" in github_config
-        assert "vpn_command" in github_config
 
     def test_get_provider_config_unknown_provider(self):
         """CONFIG-07: Getting config for unknown provider returns empty dict"""
@@ -117,21 +116,6 @@ class TestGCMConfig:
             # Should have found a config file (the 6th candidate)
             assert found_path is not None
             assert isinstance(found_path, Path)
-
-    def test_vpn_command_configuration(self):
-        """CONFIG-09: VPN command configuration works correctly"""
-        test_config = {"providers": {"gitlab": {"vpn_command": "custom-vpn-up"}}}
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.dump(test_config, f)
-            config_path = Path(f.name)
-
-        try:
-            config = GCMConfig(config_path)
-            assert config.get_vpn_command("gitlab") == "custom-vpn-up"
-            assert config.get_vpn_command("github") is None
-        finally:
-            config_path.unlink()
 
     def test_behavior_configuration(self):
         """CONFIG-10: Behavior configuration options work correctly"""
@@ -192,27 +176,6 @@ class TestGCMConfig:
         fork_remote = config.get_fork_remote("unknown")
         assert fork_remote is None
 
-    def test_get_vpn_command_with_provider(self):
-        """CONFIG-15: Get VPN command for configured provider"""
-        test_config = {"providers": {"github": {"vpn_command": "vpn connect github"}}}
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.dump(test_config, f)
-            config_path = Path(f.name)
-
-        try:
-            config = GCMConfig(config_path)
-            vpn_command = config.get_vpn_command("github")
-            assert vpn_command == "vpn connect github"
-        finally:
-            config_path.unlink()
-
-    def test_get_vpn_command_with_unknown_provider(self):
-        """CONFIG-16: Get VPN command for unknown provider returns None"""
-        config = GCMConfig()
-        vpn_command = config.get_vpn_command("unknown")
-        assert vpn_command is None
-
     def test_config_file_discovery_yml_extension(self):
         """CONFIG-17: Config file discovery with .yml extension"""
         test_config = {"providers": {"github": {"username": "testuser"}}}
@@ -235,7 +198,7 @@ class TestGCMConfig:
         test_config = {
             "providers": {
                 "github": {"username": "testuser"},
-                "gitlab": {"username": "gitlabuser", "vpn_command": "vpn gitlab"},
+                "gitlab": {"username": "gitlabuser"},
             },
             "behavior": {"confirm_destructive": False},
         }
@@ -252,7 +215,7 @@ class TestGCMConfig:
                 config.config["providers"]["github"]["fork_remote"] is None
             )  # Default
             assert config.config["providers"]["gitlab"]["username"] == "gitlabuser"
-            assert config.config["providers"]["gitlab"]["vpn_command"] == "vpn gitlab"
+
             assert config.config["behavior"]["confirm_destructive"] is False
             assert (
                 config.config["behavior"]["parallel_operations"] is True
