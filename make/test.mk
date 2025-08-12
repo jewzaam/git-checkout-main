@@ -23,5 +23,5 @@ test-all: requirements-dev ## Run all tests (unit + integration)
 
 coverage: requirements-dev ## Run tests with coverage report
 	@printf "$(BLUE)Running tests with coverage...$(RESET)\n"
-	@$(VENV_PYTHON) -m pytest tests/ --cov=gcm --cov-report=html --cov-report=term $(ARGS)
+	@$(VENV_PYTHON) -m pytest tests/ --cov=gcm --cov-report=html --cov-report=term --cov-report=xml $(ARGS)
 	@printf "$(GREEN)✅ Coverage report generated$(RESET)\n"
