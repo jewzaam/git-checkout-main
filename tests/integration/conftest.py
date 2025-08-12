@@ -10,7 +10,7 @@ import sys
 import os
 
 # Add project root to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from tests.helpers.git_repo_factory import GitRepoFactory
 
@@ -39,9 +39,7 @@ def dirty_repo(repo_factory):
 def repo_with_branches(repo_factory):
     """Provide a repository with various branch states"""
     return repo_factory.create_repo_with_branches(
-        merged=["feature-1", "feature-2"],
-        unmerged=["feature-3"],
-        gone=["old-feature"]
+        merged=["feature-1", "feature-2"], unmerged=["feature-3"], gone=["old-feature"]
     )
 
 
