@@ -17,6 +17,7 @@ venv/
 .coverage
 htmlcov/
 .tox/
+coverage.xml
 
 # Build artifacts
 build/
