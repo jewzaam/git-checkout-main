@@ -33,3 +33,6 @@ Thumbs.db
 
 # Project-specific
 .ruff_cache/
+
+# Local configuration files
+.gcm.yaml

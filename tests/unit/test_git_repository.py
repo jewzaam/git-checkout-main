@@ -23,13 +23,14 @@ class TestGitRepository:
         """GIT-01: Repository initialization succeeds in valid git repository"""
         mock_result = Mock()
         mock_result.returncode = 0
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return mock_result
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -52,13 +53,14 @@ class TestGitRepository:
         mock_result = Mock()
         mock_result.returncode = 0
         mock_result.stdout = "refs/remotes/origin/main\n"
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return mock_result
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -98,6 +100,7 @@ class TestGitRepository:
     @patch("gcm.GitRepository._run_git")
     def test_get_trunk_branch_not_found(self, mock_run_git):
         """GIT-05: Trunk branch detection fails when no common branches exist"""
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
@@ -107,7 +110,7 @@ class TestGitRepository:
                 result = Mock()
                 result.returncode = 1
                 return result
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -122,13 +125,14 @@ class TestGitRepository:
 origin\tgit@github.com:user/repo.git (push)
 upstream\tgit@github.com:upstream/repo.git (fetch)
 upstream\tgit@github.com:upstream/repo.git (push)"""
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return mock_result
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -142,13 +146,14 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
     @patch("gcm.GitRepository._run_git")
     def test_detect_provider_github(self, mock_run_git):
         """GIT-07: Provider detection identifies GitHub correctly"""
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return Mock()
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -161,13 +166,14 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
     @patch("gcm.GitRepository._run_git")
     def test_detect_provider_gitlab(self, mock_run_git):
         """GIT-08: Provider detection identifies GitLab correctly"""
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return Mock()
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -180,13 +186,14 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
     @patch("gcm.GitRepository._run_git")
     def test_detect_provider_unknown(self, mock_run_git):
         """GIT-09: Provider detection returns None for unknown providers"""
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return Mock()
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -334,13 +341,14 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
     @patch("gcm.GitRepository._run_git")
     def test_git_command_logging(self, mock_run_git):
         """GIT-16: Git commands are properly logged for debugging"""
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return Mock()
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
@@ -352,13 +360,14 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
     @patch("gcm.GitRepository._run_git")
     def test_hard_reset_and_clean(self, mock_run_git):
         """GIT-17: Hard reset and clean executes correct git commands"""
+
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
             return Mock()
-        
+
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
