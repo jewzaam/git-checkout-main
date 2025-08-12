@@ -371,3 +371,87 @@ class TestGCMWorkflow:
 
         config.get_username.assert_called_once_with("github")
         config.get_fork_remote.assert_called_once_with("github")
+
+    def test_setup_fork_remotes_creates_remote_successfully(self):
+        """MAIN-29: Setup fork remotes actually creates the remote"""
+        config = Mock()
+        config.get_username.return_value = "testuser"
+        config.get_fork_remote.return_value = "testuser"
+
+        repo = Mock()
+        repo.convert_origin_to_fork_url.return_value = (
+            "git@github.com:testuser/repo.git"
+        )
+
+        gcm = GCM(config, repo)
+
+        remotes = {"origin": "https://github.com/upstream/repo.git"}
+
+        # Should create the remote
+        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+
+        repo.convert_origin_to_fork_url.assert_called_once_with(
+            "https://github.com/upstream/repo.git", "testuser"
+        )
+        repo.add_remote.assert_called_once_with(
+            "testuser", "git@github.com:testuser/repo.git"
+        )
+
+    def test_setup_fork_remotes_dry_run_mode(self):
+        """MAIN-30: Setup fork remotes in dry-run mode doesn't create remotes"""
+        config = Mock()
+        config.get_username.return_value = "testuser"
+        config.get_fork_remote.return_value = "testuser"
+
+        repo = Mock()
+        repo.convert_origin_to_fork_url.return_value = (
+            "git@github.com:testuser/repo.git"
+        )
+
+        gcm = GCM(config, repo)
+
+        remotes = {"origin": "https://github.com/upstream/repo.git"}
+
+        # Should NOT create the remote in dry-run mode
+        gcm._setup_fork_remotes("github", remotes, dry_run=True)
+
+        repo.convert_origin_to_fork_url.assert_called_once_with(
+            "https://github.com/upstream/repo.git", "testuser"
+        )
+        repo.add_remote.assert_not_called()
+
+    def test_setup_fork_remotes_no_origin(self):
+        """MAIN-31: Setup fork remotes handles missing origin remote"""
+        config = Mock()
+        config.get_username.return_value = "testuser"
+        config.get_fork_remote.return_value = "testuser"
+
+        repo = Mock()
+
+        gcm = GCM(config, repo)
+
+        remotes = {}  # No origin remote
+
+        # Should handle missing origin gracefully
+        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+
+        repo.convert_origin_to_fork_url.assert_not_called()
+        repo.add_remote.assert_not_called()
+
+    def test_setup_fork_remotes_handles_errors(self):
+        """MAIN-32: Setup fork remotes handles errors gracefully"""
+        config = Mock()
+        config.get_username.return_value = "testuser"
+        config.get_fork_remote.return_value = "testuser"
+
+        repo = Mock()
+        repo.convert_origin_to_fork_url.side_effect = Exception("Network error")
+
+        gcm = GCM(config, repo)
+
+        remotes = {"origin": "https://github.com/upstream/repo.git"}
+
+        # Should handle errors gracefully without raising
+        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+
+        repo.add_remote.assert_not_called()
