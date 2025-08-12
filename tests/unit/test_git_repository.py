@@ -380,3 +380,327 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
 
         assert clean_called
         assert reset_called
+
+    @patch("gcm.subprocess.run")
+    def test_run_git_error_handling_with_check_true(self, mock_subprocess):
+        """GIT-18: Error handling when check=True and command fails"""
+        from subprocess import CalledProcessError
+
+        # Create a CalledProcessError with stderr
+        error = CalledProcessError(1, ["git", "status"], stderr="Command failed")
+
+        def side_effect(*args, **kwargs):
+            if "rev-parse" in str(args) and "--git-dir" in str(args):
+                result = Mock()
+                result.returncode = 0
+                result.stdout = ""
+                result.stderr = ""
+                return result
+            elif "status" in str(args):
+                raise error
+            result = Mock()
+            result.returncode = 0
+            result.stdout = ""
+            result.stderr = ""
+            return result
+
+        mock_subprocess.side_effect = side_effect
+
+        repo = GitRepository()
+
+        # Should raise GitError when check=True (default)
+        with pytest.raises(GitError, match="Git command failed: Command failed"):
+            repo._run_git(["status"], check=True)
+
+    @patch("gcm.subprocess.run")
+    def test_run_git_error_handling_with_check_false(self, mock_subprocess):
+        """GIT-19: Error handling when check=False returns error object"""
+        from subprocess import CalledProcessError
+
+        # Create a CalledProcessError
+        error = CalledProcessError(1, ["git", "status"], stderr="Command failed")
+
+        def side_effect(*args, **kwargs):
+            if "rev-parse" in str(args) and "--git-dir" in str(args):
+                result = Mock()
+                result.returncode = 0
+                result.stdout = ""
+                result.stderr = ""
+                return result
+            elif "status" in str(args):
+                raise error
+            result = Mock()
+            result.returncode = 0
+            result.stdout = ""
+            result.stderr = ""
+            return result
+
+        mock_subprocess.side_effect = side_effect
+
+        repo = GitRepository()
+
+        # Should return the error object when check=False
+        result = repo._run_git(["status"], check=False)
+        assert isinstance(result, CalledProcessError)
+
+    @patch("gcm.GitRepository._run_git")
+    def test_get_current_branch(self, mock_run_git):
+        """GIT-20: Get current branch name"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "rev-parse" in args and "--abbrev-ref" in args:
+                result = Mock()
+                result.stdout = "feature-branch\n"
+                return result
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        branch = repo.get_current_branch()
+
+        assert branch == "feature-branch"
+
+    @patch("gcm.GitRepository._run_git")
+    def test_delete_branches_empty_list(self, mock_run_git):
+        """GIT-21: Delete branches with empty list should return early"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        repo.delete_branches([])
+
+        # Should only call rev-parse for initialization, no branch deletion
+        calls = [call for call in mock_run_git.call_args_list if "branch" in str(call)]
+        assert len(calls) == 0
+
+    @patch("gcm.GitRepository._run_git")
+    def test_delete_branches_parallel_with_error(self, mock_run_git):
+        """GIT-22: Delete branches in parallel mode with error handling"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "branch" in args and "problem-branch" in args:
+                raise GitError("Cannot delete branch")
+            elif "branch" in args:
+                return Mock(returncode=0)
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+
+        # Should handle errors gracefully and continue
+        repo.delete_branches(["good-branch", "problem-branch"], parallel=True)
+
+        # Should have attempted to delete both branches (plus initial repo check)
+        branch_calls = [
+            call for call in mock_run_git.call_args_list if "branch" in str(call)
+        ]
+        assert len(branch_calls) == 2
+
+    @patch("gcm.GitRepository._run_git")
+    def test_delete_branches_sequential(self, mock_run_git):
+        """GIT-23: Delete branches in sequential mode"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "branch" in args:
+                return Mock(returncode=0)
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        repo.delete_branches(["branch1", "branch2"], parallel=False)
+
+        # Should call _delete_branch for each branch sequentially (plus initial repo check)
+        branch_calls = [
+            call for call in mock_run_git.call_args_list if "branch" in str(call)
+        ]
+        assert len(branch_calls) == 2
+
+    @patch("gcm.GitRepository._run_git")
+    def test_get_remote_merged_branches(self, mock_run_git):
+        """GIT-24: Get remote merged branches filters correctly"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "branch" in args and "--merged" in args:
+                result = Mock()
+                result.stdout = "  origin/feature1\n  origin/feature2\n  origin/main\n  other-remote/feature3\n"
+                return result
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        branches = repo.get_remote_merged_branches("origin", "main")
+
+        # Should only return origin branches that are not the trunk branch
+        assert "feature1" in branches
+        assert "feature2" in branches
+        assert "main" not in branches  # trunk branch should be excluded
+        assert "feature3" not in branches  # other remote should be excluded
+
+    @patch("gcm.GitRepository._run_git")
+    def test_delete_remote_branches_empty_list(self, mock_run_git):
+        """GIT-25: Delete remote branches with empty list should return early"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        repo.delete_remote_branches("origin", [])
+
+        # Should only call rev-parse for initialization, no push commands
+        push_calls = [
+            call for call in mock_run_git.call_args_list if "push" in str(call)
+        ]
+        assert len(push_calls) == 0
+
+    @patch("gcm.GitRepository._run_git")
+    def test_delete_remote_branches_parallel_with_error(self, mock_run_git):
+        """GIT-26: Delete remote branches in parallel mode with error handling"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "push" in args and "problem-branch" in str(args):
+                raise GitError("Cannot delete remote branch")
+            elif "push" in args:
+                return Mock(returncode=0)
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+
+        # Should handle errors gracefully and continue
+        repo.delete_remote_branches(
+            "origin", ["good-branch", "problem-branch"], parallel=True
+        )
+
+        # Should have attempted to delete both branches (plus initial repo check)
+        push_calls = [
+            call for call in mock_run_git.call_args_list if "push" in str(call)
+        ]
+        assert len(push_calls) == 2
+
+    @patch("gcm.GitRepository._run_git")
+    def test_delete_remote_branches_sequential(self, mock_run_git):
+        """GIT-27: Delete remote branches in sequential mode"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "push" in args:
+                return Mock(returncode=0)
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        repo.delete_remote_branches("origin", ["branch1", "branch2"], parallel=False)
+
+        # Should call push for each branch sequentially (plus initial repo check)
+        push_calls = [
+            call for call in mock_run_git.call_args_list if "push" in str(call)
+        ]
+        assert len(push_calls) == 2
+
+    @patch("gcm.GitRepository._run_git")
+    def test_push_branch_success(self, mock_run_git):
+        """GIT-28: Push branch succeeds"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "push" in args:
+                return Mock(returncode=0)
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        result = repo.push_branch("origin", "main")
+
+        assert result is True
+
+    @patch("gcm.GitRepository._run_git")
+    def test_push_branch_failure(self, mock_run_git):
+        """GIT-29: Push branch handles failure"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "push" in args:
+                raise GitError("Push failed")
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        result = repo.push_branch("origin", "main")
+
+        assert result is False
+
+    @patch("gcm.GitRepository._run_git")
+    def test_set_push_url(self, mock_run_git):
+        """GIT-30: Set push URL for remote"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "remote" in args and "set-url" in args:
+                return Mock(returncode=0)
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        repo.set_push_url("origin", "git@github.com:user/repo.git")
+
+        # Should call remote set-url with --push flag
+        remote_calls = [
+            call
+            for call in mock_run_git.call_args_list
+            if "remote" in str(call) and "set-url" in str(call)
+        ]
+        assert len(remote_calls) == 1
