@@ -344,6 +344,37 @@ class GitRepository:
         """Set push URL for a remote"""
         self._run_git(["remote", "set-url", "--push", remote, url])
 
+    def add_remote(self, name: str, url: str) -> None:
+        """Add a new remote and fetch from it"""
+        self._run_git(["remote", "add", name, url])
+        self._run_git(["fetch", name])
+
+    def convert_origin_to_fork_url(self, origin_url: str, username: str) -> str:
+        """Convert origin URL to fork URL for the given username"""
+        import re
+
+        # Handle HTTPS URLs like https://github.com/owner/repo.git
+        https_match = re.match(r"https?://([^/]+)/([^/]+)/(.+)", origin_url)
+        if https_match:
+            host = https_match.group(1)
+            repo_path = https_match.group(3)
+            # Remove .git suffix if present
+            if repo_path.endswith(".git"):
+                repo_path = repo_path[:-4]
+            return f"git@{host}:{username}/{repo_path}.git"
+
+        # Handle SSH URLs like git@github.com:owner/repo.git
+        ssh_match = re.match(r"git@([^:]+):([^/]+)/(.+)", origin_url)
+        if ssh_match:
+            host = ssh_match.group(1)
+            repo_path = ssh_match.group(3)
+            # Remove .git suffix if present
+            if repo_path.endswith(".git"):
+                repo_path = repo_path[:-4]
+            return f"git@{host}:{username}/{repo_path}.git"
+
+        raise GitError(f"Unable to parse origin URL: {origin_url}")
+
     def hard_reset_and_clean(self) -> None:
         """Perform hard reset and clean (DESTRUCTIVE)"""
         self._run_git(["clean", "-xdf"])
@@ -424,8 +455,27 @@ class GCM:
             return
 
         if fork_remote not in remotes:
-            self.logger.info(f"Would create {fork_remote} remote for {provider}")
-            # Note: Actual fork creation would need provider-specific logic
+            origin_url = remotes.get("origin")
+            if not origin_url:
+                self.logger.error("No origin remote found, cannot create fork remote")
+                return
+
+            try:
+                fork_url = self.repo.convert_origin_to_fork_url(origin_url, username)
+                self.logger.info(
+                    f"Creating {fork_remote} remote for {provider}: {fork_url}"
+                )
+
+                if not dry_run:
+                    self.repo.add_remote(fork_remote, fork_url)
+                    self.logger.info(f"Successfully created {fork_remote} remote")
+                else:
+                    self.logger.info(
+                        f"Would create {fork_remote} remote with URL: {fork_url}"
+                    )
+
+            except Exception as e:
+                self.logger.error(f"Failed to create {fork_remote} remote: {e}")
 
     def _configure_origin_push(self, remotes: Dict[str, str], dry_run: bool) -> None:
         """Disable push to origin if forks exist"""

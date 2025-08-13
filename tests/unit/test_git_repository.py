@@ -704,3 +704,92 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
             if "remote" in str(call) and "set-url" in str(call)
         ]
         assert len(remote_calls) == 1
+
+    @patch("gcm.GitRepository._run_git")
+    def test_add_remote(self, mock_run_git):
+        """GIT-31: Add remote and fetch from it"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                result = Mock()
+                result.returncode = 0
+                return result
+            elif "remote" in args and "add" in args:
+                return Mock(returncode=0)
+            elif "fetch" in args:
+                return Mock(returncode=0)
+            return Mock()
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        repo.add_remote("myuser", "git@github.com:myuser/repo.git")
+
+        # Should call git remote add and then git fetch
+        add_calls = [
+            call
+            for call in mock_run_git.call_args_list
+            if "remote" in str(call) and "add" in str(call)
+        ]
+        fetch_calls = [
+            call for call in mock_run_git.call_args_list if "fetch" in str(call)
+        ]
+        assert len(add_calls) == 1
+        assert len(fetch_calls) == 1
+
+    @patch("gcm.GitRepository._run_git")
+    def test_convert_origin_to_fork_url_https(self, mock_run_git):
+        """GIT-32: Convert HTTPS origin URL to fork SSH URL"""
+        mock_run_git.return_value = Mock(returncode=0)
+        repo = GitRepository()
+
+        # Test HTTPS URL
+        origin_url = "https://github.com/upstream/repo.git"
+        fork_url = repo.convert_origin_to_fork_url(origin_url, "myuser")
+        assert fork_url == "git@github.com:myuser/repo.git"
+
+        # Test HTTPS URL without .git
+        origin_url = "https://github.com/upstream/repo"
+        fork_url = repo.convert_origin_to_fork_url(origin_url, "myuser")
+        assert fork_url == "git@github.com:myuser/repo.git"
+
+    @patch("gcm.GitRepository._run_git")
+    def test_convert_origin_to_fork_url_ssh(self, mock_run_git):
+        """GIT-33: Convert SSH origin URL to fork SSH URL"""
+        mock_run_git.return_value = Mock(returncode=0)
+        repo = GitRepository()
+
+        # Test SSH URL
+        origin_url = "git@github.com:upstream/repo.git"
+        fork_url = repo.convert_origin_to_fork_url(origin_url, "myuser")
+        assert fork_url == "git@github.com:myuser/repo.git"
+
+        # Test SSH URL without .git
+        origin_url = "git@github.com:upstream/repo"
+        fork_url = repo.convert_origin_to_fork_url(origin_url, "myuser")
+        assert fork_url == "git@github.com:myuser/repo.git"
+
+    @patch("gcm.GitRepository._run_git")
+    def test_convert_origin_to_fork_url_gitlab(self, mock_run_git):
+        """GIT-34: Convert GitLab URLs to fork URLs"""
+        mock_run_git.return_value = Mock(returncode=0)
+        repo = GitRepository()
+
+        # Test GitLab HTTPS
+        origin_url = "https://gitlab.com/upstream/repo.git"
+        fork_url = repo.convert_origin_to_fork_url(origin_url, "myuser")
+        assert fork_url == "git@gitlab.com:myuser/repo.git"
+
+        # Test GitLab SSH
+        origin_url = "git@gitlab.com:upstream/repo.git"
+        fork_url = repo.convert_origin_to_fork_url(origin_url, "myuser")
+        assert fork_url == "git@gitlab.com:myuser/repo.git"
+
+    @patch("gcm.GitRepository._run_git")
+    def test_convert_origin_to_fork_url_invalid(self, mock_run_git):
+        """GIT-35: Handle invalid origin URLs"""
+        mock_run_git.return_value = Mock(returncode=0)
+        repo = GitRepository()
+
+        with pytest.raises(GitError, match="Unable to parse origin URL"):
+            repo.convert_origin_to_fork_url("invalid-url", "myuser")
