@@ -17,7 +17,7 @@ GCM is a git workflow automation tool that manages the "checkout main" workflow 
 
 ### 1. Trunk Branch Management
 - **REQ-001**: Automatically detect the primary/trunk branch from `origin/HEAD`
-- **REQ-002**: Support common trunk branch names: `main`, `trunk`, or any branch pointed to by `origin/HEAD`
+- **REQ-002**: Automatically detect trunk branch from `origin/HEAD`
 - **REQ-003**: Checkout and pull latest changes from trunk branch
 - **REQ-004**: Handle cases where trunk branch doesn't exist locally (create from origin)
 
@@ -94,8 +94,7 @@ providers:
 remotes:
   upstream: "origin"
   
-branches:
-  trunk_aliases: ["main", "trunk"]
+
 
 behavior:
   auto_create_forks: false

@@ -24,9 +24,7 @@ remotes:
   upstream: "origin"
 
 # Branch configuration  
-# trunk_aliases: List of branch names considered "trunk" branches (auto-detected)
-branches:
-  trunk_aliases: ["main", "trunk"]
+
 
 # Behavioral settings
 # auto_create_forks: Automatically create fork remotes (true) or require -m flag (false)

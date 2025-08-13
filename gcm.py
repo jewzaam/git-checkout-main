@@ -44,7 +44,6 @@ class GCMConfig:
             "gitlab": {"username": None, "fork_remote": None},
         },
         "remotes": {"upstream": "origin"},
-        "branches": {"trunk_aliases": ["main", "trunk"]},
         "behavior": {
             "auto_create_forks": False,
             "confirm_destructive": True,
@@ -110,10 +109,9 @@ class GCMConfig:
 class GitRepository:
     """Git repository operations and state management"""
 
-    def __init__(self, path: Path = None, config: Dict[str, Any] = None):
+    def __init__(self, path: Path = None):
         self.path = path or Path.cwd()
         self.logger = logging.getLogger(__name__)
-        self.config = config or {}
         self._ensure_git_repo()
 
     def _ensure_git_repo(self) -> None:
@@ -156,15 +154,6 @@ class GitRepository:
             match = re.search(r"refs/remotes/origin/(.+)", result.stdout.strip())
             if match:
                 return match.group(1)
-
-        # Fallback: try configured trunk aliases
-        trunk_aliases = self.config.get("branches", {}).get("trunk_aliases", ["main", "trunk"])
-        for branch in trunk_aliases:
-            result = self._run_git(
-                ["rev-parse", "--verify", f"origin/{branch}"], check=False
-            )
-            if result.returncode == 0:
-                return branch
 
         raise GitError("Could not determine trunk branch")
 
@@ -620,7 +609,7 @@ def main() -> int:
 
     try:
         config = GCMConfig(args.config)
-        repo = GitRepository(config=config.config)
+        repo = GitRepository()
         gcm = GCM(config, repo)
 
         return gcm.run(make_remotes=args.make_remotes, dry_run=args.dry_run)
