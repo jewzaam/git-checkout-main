@@ -1,6 +1,6 @@
-# GCM - Git Checkout Master
+# GCM - Git Checkout Main
 
-Git Checkout Master (GCM) is a portable Python git workflow automation tool that manages the "checkout master" workflow with proper fork management and branch cleanup.
+Git Checkout Main (GCM) is a portable Python git workflow automation tool that manages the "checkout main" workflow with proper fork management and branch cleanup.
 
 Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.
 

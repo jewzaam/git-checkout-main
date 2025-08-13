@@ -22,11 +22,11 @@ Integration tests create temporary git repositories with controlled states to te
 | Test ID | Description | Setup | Expected Result |
 |---------|-------------|--------|-----------------|
 | REPO-01 | Clean repository with origin/HEAD pointing to main | Fresh repo, main branch, clean working tree | Successfully processes main branch |
-| REPO-02 | Clean repository with origin/HEAD pointing to master | Fresh repo, master branch, clean working tree | Successfully processes master branch |
+| REPO-02 | Clean repository with origin/HEAD pointing to main | Fresh repo, main branch, clean working tree | Successfully processes main branch |
 | REPO-03 | Repository with dirty working tree | Uncommitted changes in working directory | Prompts for reset or fails gracefully |
 | REPO-04 | Repository in detached HEAD state | Checkout specific commit (detached HEAD) | Handles detached state, checks out trunk |
 | REPO-05 | Repository with no origin/HEAD set | Remove origin/HEAD reference | Falls back to common branch detection |
-| REPO-06 | Repository with no common trunk branches | Only feature branches, no main/master | Fails with clear error message |
+| REPO-06 | Repository with no common trunk branches | Only feature branches, no main/trunk | Fails with clear error message |
 
 ## BRANCH - Branch Management Tests  
 

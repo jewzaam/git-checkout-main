@@ -2,7 +2,7 @@
 
 MAKE_REMOTES=$1
 
-# "trunk" is the primary branch, usually "main" or "master" but generalized to whatever origin/HEAD points to
+# "trunk" is the primary branch, usually "main" but generalized to whatever origin/HEAD points to
 BRANCH_TRUNK=$(git branch -a | grep "remotes/origin/HEAD" | sed 's|.* -> .*/\([^/]*\)|\1|g' | head -n1)
 
 function reset_git_trunk {
