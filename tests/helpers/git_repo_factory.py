@@ -244,6 +244,6 @@ class GitRepoFactory:
         self._run_git(repo_path, ["remote", "add", "origin", str(bare_remote)])
         self._run_git(repo_path, ["push", "-u", "origin", "development"])
 
-        # Don't set origin/HEAD, and no main/master branches exist
+        # Don't set origin/HEAD
 
         return repo_path

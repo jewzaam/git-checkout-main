@@ -69,20 +69,12 @@ class TestGitRepository:
 
     @patch("gcm.GitRepository._run_git")
     def test_get_trunk_branch_fallback(self, mock_run_git):
-        """GIT-04: Trunk branch detection falls back to common names"""
+        """GIT-04: Trunk branch detection fails when origin/HEAD is not set"""
 
-        # First call (symbolic-ref) fails, second call (main) succeeds
+        # First call (symbolic-ref) fails, no fallback
         def side_effect(args, **kwargs):
             if "rev-parse" in args and "--git-dir" in args:
                 # Git repo validation - return success
-                result = Mock()
-                result.returncode = 0
-                return result
-            elif "symbolic-ref" in args:
-                result = Mock()
-                result.returncode = 1
-                return result
-            elif "origin/main" in args:
                 result = Mock()
                 result.returncode = 0
                 return result
@@ -94,8 +86,8 @@ class TestGitRepository:
         mock_run_git.side_effect = side_effect
 
         repo = GitRepository()
-        trunk = repo.get_trunk_branch()
-        assert trunk == "main"
+        with pytest.raises(GitError, match="Could not determine trunk branch"):
+            repo.get_trunk_branch()
 
     @patch("gcm.GitRepository._run_git")
     def test_get_trunk_branch_not_found(self, mock_run_git):

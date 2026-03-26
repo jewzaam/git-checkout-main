@@ -24,9 +24,9 @@ class TestRepositoryStates:
         assert "main" in result.stderr  # Should detect main branch
         assert "Trunk branch: main" in result.stderr
 
-    def test_clean_repo_master_branch(self, repo_factory, gcm_script):
-        """REPO-02: Clean repository with origin/HEAD pointing to master"""
-        repo_path = repo_factory.create_clean_repo("master")
+    def test_clean_repo_main_branch_factory(self, repo_factory, gcm_script):
+        """REPO-02: Clean repository with origin/HEAD pointing to main"""
+        repo_path = repo_factory.create_clean_repo("main")
 
         result = subprocess.run(
             [sys.executable, str(gcm_script), "--dry-run"],
@@ -36,8 +36,8 @@ class TestRepositoryStates:
         )
 
         assert result.returncode == 0, f"GCM failed: {result.stderr}"
-        assert "master" in result.stderr  # Should detect master branch
-        assert "Trunk branch: master" in result.stderr
+        assert "main" in result.stderr  # Should detect main branch
+        assert "Trunk branch: main" in result.stderr
 
     def test_dirty_working_tree(self, dirty_repo, gcm_script):
         """REPO-03: Repository with dirty working tree"""
@@ -76,8 +76,9 @@ class TestRepositoryStates:
             text=True,
         )
 
-        assert result.returncode == 0, f"GCM failed: {result.stderr}"
-        # Should fall back to detecting common branch names
+        # Should fail with clear error message when no origin/HEAD is set
+        assert result.returncode == 1
+        assert "Could not determine trunk branch" in result.stderr
 
     def test_no_common_trunk_branches(self, repo_factory, gcm_script):
         """REPO-06: Repository with no common trunk branches"""

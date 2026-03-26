@@ -1,9 +1,9 @@
-# GCM - Git Checkout Master
+# GCM - Git Checkout Main
 
 [![PR Check](https://github.com/jewzaam/git-checkout-main/actions/workflows/pr-check.yml/badge.svg)](https://github.com/jewzaam/git-checkout-main/actions/workflows/pr-check.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/jewzaam/git-checkout-main/main/.github/badges/coverage.json)](https://github.com/jewzaam/git-checkout-main/actions/workflows/coverage-badge.yml)
 
-A portable Python rewrite of the original git workflow automation tool for managing the "checkout master" workflow with proper fork management and branch cleanup.
+A portable Python rewrite of the original git workflow automation tool for managing the "checkout main" workflow with proper fork management and branch cleanup.
 
 ## Features
 

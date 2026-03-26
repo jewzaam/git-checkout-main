@@ -98,7 +98,7 @@ elif "gitlab" in remote_url:
 ### 🟡 **Branch Detection Edge Cases**
 ```python
 # Your trunk detection:
-for branch in ["main", "master", "trunk"]:
+        # No fallback - trunk branch must be set in origin/HEAD
     result = self._run_git(["rev-parse", "--verify", f"origin/{branch}"], check=False)
     if result.returncode == 0:
         return branch
