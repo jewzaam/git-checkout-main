@@ -406,8 +406,8 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
 
     @patch("gcm.subprocess.run")
     def test_run_git_error_handling_with_check_false(self, mock_subprocess):
-        """GIT-19: Error handling when check=False returns error object"""
-        from subprocess import CalledProcessError
+        """GIT-19: Error handling when check=False returns CompletedProcess with error state"""
+        from subprocess import CalledProcessError, CompletedProcess
 
         # Create a CalledProcessError
         error = CalledProcessError(1, ["git", "status"], stderr="Command failed")
@@ -431,9 +431,10 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
 
         repo = GitRepository()
 
-        # Should return the error object when check=False
+        # Should return CompletedProcess with non-zero returncode when check=False
         result = repo._run_git(["status"], check=False)
-        assert isinstance(result, CalledProcessError)
+        assert isinstance(result, CompletedProcess)
+        assert result.returncode == 1
 
     @patch("gcm.GitRepository._run_git")
     def test_get_current_branch(self, mock_run_git):
