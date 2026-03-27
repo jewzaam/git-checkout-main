@@ -14,7 +14,7 @@ class TestRepositoryStates:
     def test_clean_repo_main_branch(self, clean_repo, gcm_script):
         """REPO-01: Clean repository with origin/HEAD pointing to main"""
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=clean_repo,
             capture_output=True,
             text=True,
@@ -29,7 +29,7 @@ class TestRepositoryStates:
         repo_path = repo_factory.create_clean_repo("main")
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -42,7 +42,7 @@ class TestRepositoryStates:
     def test_dirty_working_tree(self, dirty_repo, gcm_script):
         """REPO-03: Repository with dirty working tree"""
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=dirty_repo,
             capture_output=True,
             text=True,
@@ -56,7 +56,7 @@ class TestRepositoryStates:
         repo_path = repo_factory.create_detached_head_repo()
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -70,7 +70,7 @@ class TestRepositoryStates:
         repo_path = repo_factory.create_repo_no_origin_head()
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -85,7 +85,7 @@ class TestRepositoryStates:
         repo_path = repo_factory.create_repo_no_common_branches()
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -105,7 +105,7 @@ class TestBranchManagement:
     def test_branch_cleanup_dry_run(self, repo_with_branches, gcm_script):
         """BRANCH-01-04: Test branch cleanup in dry-run mode"""
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=repo_with_branches,
             capture_output=True,
             text=True,
@@ -127,7 +127,7 @@ class TestBranchManagement:
         )
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -152,7 +152,7 @@ providers:
         config_file.write_text(config_content)
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=clean_repo,
             capture_output=True,
             text=True,
@@ -167,7 +167,7 @@ providers:
         config_file.write_text("invalid: yaml: content: [")
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=clean_repo,
             capture_output=True,
             text=True,
@@ -188,7 +188,7 @@ class TestProviderDetection:
         )
 
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -201,7 +201,7 @@ class TestProviderDetection:
         """PROVIDER-03: Unknown provider"""
         # The clean_repo uses a local bare repository, which should be "unknown"
         result = subprocess.run(
-            [sys.executable, str(gcm_script), "--dry-run"],
+            [sys.executable, str(gcm_script), "--dryrun"],
             cwd=clean_repo,
             capture_output=True,
             text=True,

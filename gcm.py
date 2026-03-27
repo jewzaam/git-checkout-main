@@ -13,8 +13,16 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any
+
 import yaml
+
+
+__version__ = "0.1.0"
+
+DISABLED_PUSH_URL = "no_push"  # Sentinel URL to prevent pushing to origin
+EXIT_SUCCESS = 0
+EXIT_ERROR = 1
 
 
 class GCMError(Exception):
@@ -51,7 +59,7 @@ class GCMConfig:
         },
     }
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, *, config_path: Optional[Path] = None):
         self.config_path = config_path or self._find_config_file()
         self.config = self._load_config()
 
@@ -105,11 +113,23 @@ class GCMConfig:
         """Get fork remote name for a provider"""
         return self.get_provider_config(provider).get("fork_remote")
 
+    def get_parallel_operations(self) -> bool:
+        """Get parallel operations setting"""
+        return self.config.get("behavior", {}).get("parallel_operations", True)
+
+    def get_confirm_destructive(self) -> bool:
+        """Get confirm destructive setting"""
+        return self.config.get("behavior", {}).get("confirm_destructive", True)
+
+    def get_provider_names(self) -> List[str]:
+        """Get list of configured provider names"""
+        return list(self.config.get("providers", {}).keys())
+
 
 class GitRepository:
     """Git repository operations and state management"""
 
-    def __init__(self, path: Path = None):
+    def __init__(self, *, path: Path = None):
         self.path = path or Path.cwd()
         self.logger = logging.getLogger(__name__)
         self._ensure_git_repo()
@@ -121,7 +141,7 @@ class GitRepository:
             raise GitError(f"Not a git repository: {self.path}")
 
     def _run_git(
-        self, args: List[str], check: bool = True, capture_output: bool = True
+        self, args: List[str], *, check: bool = True, capture_output: bool = True
     ) -> subprocess.CompletedProcess:
         """Run git command with error handling"""
         cmd = ["git"] + args
@@ -142,7 +162,12 @@ class GitRepository:
             self.logger.error(f"Error: {e.stderr}")
             if check:
                 raise GitError(f"Git command failed: {e.stderr}")
-            return e
+            return subprocess.CompletedProcess(
+                args=e.cmd,
+                returncode=e.returncode,
+                stdout=e.stdout or "",
+                stderr=e.stderr or "",
+            )
 
     def get_trunk_branch(self) -> str:
         """Detect the trunk/main branch from origin/HEAD"""
@@ -191,14 +216,15 @@ class GitRepository:
         result = self._run_git(["status", "--porcelain"])
         return not result.stdout.strip()
 
-    def checkout_branch(self, branch: str, create_from_remote: bool = True) -> bool:
+    def checkout_branch(self, branch: str, *, create_from_remote: bool = True) -> bool:
         """Checkout branch, optionally creating from remote"""
         try:
             if create_from_remote:
-                # Try to create from origin first
-                self._run_git(
+                result = self._run_git(
                     ["checkout", "-b", branch, f"origin/{branch}"], check=False
                 )
+                if result.returncode == 0:
+                    return True
 
             # Fallback to regular checkout
             result = self._run_git(["checkout", branch], check=False)
@@ -214,23 +240,36 @@ class GitRepository:
         except GitError:
             return False
 
-    def prune_remotes(self, parallel: bool = True) -> None:
-        """Prune all remotes"""
-        remotes = list(self.get_remotes().keys())
+    def _run_parallel_or_sequential(
+        self,
+        func: Callable,
+        items: list,
+        operation_name: str,
+        *,
+        parallel: bool = True,
+    ) -> None:
+        """Run function on items in parallel or sequentially with error handling"""
+        if not items:
+            return
 
         if parallel:
-            with ThreadPoolExecutor(max_workers=len(remotes)) as executor:
-                futures = [
-                    executor.submit(self._prune_remote, remote) for remote in remotes
-                ]
+            with ThreadPoolExecutor(max_workers=min(len(items), 10)) as executor:
+                futures = [executor.submit(func, item) for item in items]
                 for future in as_completed(futures):
                     try:
                         future.result()
                     except Exception as e:
-                        self.logger.warning(f"Failed to prune remote: {e}")
+                        self.logger.warning(f"Failed to {operation_name}: {e}")
         else:
-            for remote in remotes:
-                self._prune_remote(remote)
+            for item in items:
+                func(item)
+
+    def prune_remotes(self, *, parallel: bool = True) -> None:
+        """Prune all remotes"""
+        remotes = list(self.get_remotes().keys())
+        self._run_parallel_or_sequential(
+            self._prune_remote, remotes, "prune remote", parallel=parallel
+        )
 
     def _prune_remote(self, remote: str) -> None:
         """Prune a single remote"""
@@ -261,24 +300,11 @@ class GitRepository:
 
         return branches
 
-    def delete_branches(self, branches: List[str], parallel: bool = True) -> None:
+    def delete_branches(self, branches: List[str], *, parallel: bool = True) -> None:
         """Delete local branches"""
-        if not branches:
-            return
-
-        if parallel:
-            with ThreadPoolExecutor(max_workers=len(branches)) as executor:
-                futures = [
-                    executor.submit(self._delete_branch, branch) for branch in branches
-                ]
-                for future in as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        self.logger.warning(f"Failed to delete branch: {e}")
-        else:
-            for branch in branches:
-                self._delete_branch(branch)
+        self._run_parallel_or_sequential(
+            self._delete_branch, branches, "delete branch", parallel=parallel
+        )
 
     def _delete_branch(self, branch: str) -> None:
         """Delete a single local branch"""
@@ -298,26 +324,15 @@ class GitRepository:
         return branches
 
     def delete_remote_branches(
-        self, remote: str, branches: List[str], parallel: bool = True
+        self, remote: str, branches: List[str], *, parallel: bool = True
     ) -> None:
         """Delete remote branches"""
-        if not branches:
-            return
-
-        if parallel:
-            with ThreadPoolExecutor(max_workers=len(branches)) as executor:
-                futures = [
-                    executor.submit(self._delete_remote_branch, remote, branch)
-                    for branch in branches
-                ]
-                for future in as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        self.logger.warning(f"Failed to delete remote branch: {e}")
-        else:
-            for branch in branches:
-                self._delete_remote_branch(remote, branch)
+        self._run_parallel_or_sequential(
+            lambda branch: self._delete_remote_branch(remote, branch),
+            branches,
+            "delete remote branch",
+            parallel=parallel,
+        )
 
     def _delete_remote_branch(self, remote: str, branch: str) -> None:
         """Delete a single remote branch"""
@@ -342,8 +357,6 @@ class GitRepository:
 
     def convert_origin_to_fork_url(self, origin_url: str, username: str) -> str:
         """Convert origin URL to fork URL for the given username"""
-        import re
-
         # Handle HTTPS URLs like https://github.com/owner/repo.git
         https_match = re.match(r"https?://([^/]+)/([^/]+)/(.+)", origin_url)
         if https_match:
@@ -380,7 +393,7 @@ class GCM:
         self.repo = repo
         self.logger = logging.getLogger(__name__)
 
-    def run(self, make_remotes: bool = False, dry_run: bool = False) -> int:
+    def run(self, *, make_remotes: bool = False, dryrun: bool = False) -> int:
         """Run the main GCM workflow"""
         try:
             self.logger.info("Starting GCM workflow...")
@@ -401,41 +414,39 @@ class GCM:
 
             # Setup fork remotes if requested
             if make_remotes and provider:
-                self._setup_fork_remotes(provider, remotes, dry_run)
+                self._setup_fork_remotes(provider, remotes, dryrun)
 
             # Disable push to origin if forks exist
-            self._configure_origin_push(remotes, dry_run)
+            self._configure_origin_push(remotes, dryrun)
 
             # Checkout and update trunk
-            self._checkout_and_update_trunk(trunk_branch, dry_run)
+            self._checkout_and_update_trunk(trunk_branch, dryrun)
 
             # Prune remotes
-            if not dry_run:
+            if not dryrun:
                 self.logger.info("Pruning remotes...")
-                self.repo.prune_remotes(
-                    self.config.config["behavior"]["parallel_operations"]
-                )
+                self.repo.prune_remotes(parallel=self.config.get_parallel_operations())
 
             # Clean up branches
-            self._cleanup_branches(trunk_branch, remotes, dry_run)
+            self._cleanup_branches(trunk_branch, remotes, dryrun)
 
             # Sync to forks
             if provider:
-                self._sync_to_forks(provider, remotes, trunk_branch, dry_run)
+                self._sync_to_forks(provider, remotes, trunk_branch, dryrun)
 
             # Show final status
-            if not dry_run:
-                self._run_git(["status"], capture_output=False)
+            if not dryrun:
+                self.repo._run_git(["status"], capture_output=False)
 
             self.logger.info("GCM workflow completed successfully")
-            return 0
+            return EXIT_SUCCESS
 
         except Exception as e:
             self.logger.error(f"GCM workflow failed: {e}")
-            return 1
+            return EXIT_ERROR
 
     def _setup_fork_remotes(
-        self, provider: str, remotes: Dict[str, str], dry_run: bool
+        self, provider: str, remotes: Dict[str, str], dryrun: bool
     ) -> None:
         """Setup fork remotes if they don't exist"""
         username = self.config.get_username(provider)
@@ -457,7 +468,7 @@ class GCM:
                     f"Creating {fork_remote} remote for {provider}: {fork_url}"
                 )
 
-                if not dry_run:
+                if not dryrun:
                     self.repo.add_remote(fork_remote, fork_url)
                     self.logger.info(f"Successfully created {fork_remote} remote")
                 else:
@@ -468,24 +479,24 @@ class GCM:
             except Exception as e:
                 self.logger.error(f"Failed to create {fork_remote} remote: {e}")
 
-    def _configure_origin_push(self, remotes: Dict[str, str], dry_run: bool) -> None:
+    def _configure_origin_push(self, remotes: Dict[str, str], dryrun: bool) -> None:
         """Disable push to origin if forks exist"""
         has_forks = any(
             self.config.get_fork_remote(provider) in remotes
-            for provider in ["github", "gitlab"]
+            for provider in self.config.get_provider_names()
             if self.config.get_fork_remote(provider)
         )
 
         if has_forks:
             self.logger.info("Disabling push to origin (forks detected)")
-            if not dry_run:
-                self.repo.set_push_url("origin", "no_push")
+            if not dryrun:
+                self.repo.set_push_url("origin", DISABLED_PUSH_URL)
 
-    def _checkout_and_update_trunk(self, trunk_branch: str, dry_run: bool) -> None:
+    def _checkout_and_update_trunk(self, trunk_branch: str, dryrun: bool) -> None:
         """Checkout and update trunk branch"""
         self.logger.info(f"Checking out and updating {trunk_branch}...")
 
-        if dry_run:
+        if dryrun:
             self.logger.info(f"Would checkout {trunk_branch} and pull latest changes")
             return
 
@@ -509,16 +520,19 @@ class GCM:
 
     def _should_reset(self) -> bool:
         """Ask user if they want to do a hard reset"""
-        if not self.config.config["behavior"]["confirm_destructive"]:
+        if not self.config.get_confirm_destructive():
             return False
 
-        response = input(
-            "\nDo a hard reset and clean (ALL UNSTAGED AND NEW CHANGES WILL BE DELETED) [yes/NO]: "
-        )
-        return response.lower() == "yes"
+        try:
+            response = input(
+                "\nDo a hard reset and clean (ALL UNSTAGED AND NEW CHANGES WILL BE DELETED) [yes/NO]: "
+            )
+            return response.lower() == "yes"
+        except (EOFError, KeyboardInterrupt):
+            return False
 
     def _cleanup_branches(
-        self, trunk_branch: str, remotes: Dict[str, str], dry_run: bool
+        self, trunk_branch: str, remotes: Dict[str, str], dryrun: bool
     ) -> None:
         """Clean up local and remote branches"""
         self.logger.info("Cleaning up branches...")
@@ -532,14 +546,14 @@ class GCM:
             self.logger.info(
                 f"Deleting local branches: {', '.join(all_local_branches)}"
             )
-            if not dry_run:
+            if not dryrun:
                 self.repo.delete_branches(
                     all_local_branches,
-                    self.config.config["behavior"]["parallel_operations"],
+                    parallel=self.config.get_parallel_operations(),
                 )
 
         # Clean up remote fork branches
-        for provider in ["github", "gitlab"]:
+        for provider in self.config.get_provider_names():
             fork_remote = self.config.get_fork_remote(provider)
             if fork_remote and fork_remote in remotes:
                 remote_branches = self.repo.get_remote_merged_branches(
@@ -549,32 +563,47 @@ class GCM:
                     self.logger.info(
                         f"Deleting {fork_remote} branches: {', '.join(remote_branches)}"
                     )
-                    if not dry_run:
+                    if not dryrun:
                         self.repo.delete_remote_branches(
                             fork_remote,
                             remote_branches,
-                            self.config.config["behavior"]["parallel_operations"],
+                            parallel=self.config.get_parallel_operations(),
                         )
 
     def _sync_to_forks(
-        self, provider: str, remotes: Dict[str, str], trunk_branch: str, dry_run: bool
+        self, provider: str, remotes: Dict[str, str], trunk_branch: str, dryrun: bool
     ) -> None:
         """Sync trunk branch to user forks"""
         fork_remote = self.config.get_fork_remote(provider)
 
         if fork_remote and fork_remote in remotes:
             self.logger.info(f"Syncing {trunk_branch} to {fork_remote}...")
-            if not dry_run:
+            if not dryrun:
                 self.repo.push_branch(fork_remote, trunk_branch)
 
 
-def setup_logging(level: str = "INFO") -> None:
+def setup_logging(
+    *, debug: bool = False, quiet: bool = False, log_file: str = None
+) -> None:
     """Setup logging configuration"""
-    logging.basicConfig(
-        level=getattr(logging, level.upper()),
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    if debug:
+        level = logging.DEBUG
+    elif quiet:
+        level = logging.WARNING
+    else:
+        level = logging.INFO
+
+    log_kwargs: dict = {
+        "level": level,
+        "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+        "datefmt": "%Y-%m-%d %H:%M:%S",
+    }
+    if log_file:
+        log_kwargs["filename"] = log_file
+        log_kwargs["filemode"] = "a"
+    else:
+        log_kwargs["stream"] = sys.stderr
+    logging.basicConfig(**log_kwargs)
 
 
 def main() -> int:
@@ -585,38 +614,39 @@ def main() -> int:
     )
 
     parser.add_argument(
-        "-m", "--make-remotes", action="store_true", help="Create missing fork remotes"
+        "-m", "--make-remotes", action="store_true", help="create missing fork remotes"
     )
 
-    parser.add_argument("--config", type=Path, help="Path to configuration file")
+    parser.add_argument("--config", type=Path, help="path to configuration file")
 
     parser.add_argument(
-        "--dry-run",
+        "--dryrun",
         action="store_true",
-        help="Show what would be done without making changes",
+        help="show what would be done without making changes",
     )
 
+    parser.add_argument("--debug", action="store_true", help="enable debug output")
+
     parser.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Set logging level",
+        "--quiet", "-q", action="store_true", help="suppress non-essential output"
     )
+
+    parser.add_argument("--log-file", type=str, help="write log output to file")
 
     args = parser.parse_args()
 
-    setup_logging(args.log_level)
+    setup_logging(debug=args.debug, quiet=args.quiet, log_file=args.log_file)
 
     try:
-        config = GCMConfig(args.config)
+        config = GCMConfig(config_path=args.config)
         repo = GitRepository()
         gcm = GCM(config, repo)
 
-        return gcm.run(make_remotes=args.make_remotes, dry_run=args.dry_run)
+        return gcm.run(make_remotes=args.make_remotes, dryrun=args.dryrun)
 
     except Exception as e:
         logging.error(f"Fatal error: {e}")
-        return 1
+        return EXIT_ERROR
 
 
 if __name__ == "__main__":
