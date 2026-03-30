@@ -274,8 +274,9 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
         success = repo.checkout_branch("nonexistent")
         assert success is False
 
+    @patch("gcm.GitRepository.is_merged")
     @patch("gcm.GitRepository._run_git")
-    def test_get_merged_branches(self, mock_run_git):
+    def test_get_merged_branches(self, mock_run_git, mock_is_merged):
         """GIT-14: Merged branch detection finds correct branches"""
 
         def side_effect(args, **kwargs):
@@ -283,7 +284,7 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
                 result = Mock()
                 result.returncode = 0
                 return result
-            elif "--merged" in args:
+            elif "branch" in args and len(args) == 1:
                 result = Mock()
                 result.stdout = """  feature-branch
 * main
@@ -293,6 +294,7 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
             return Mock()
 
         mock_run_git.side_effect = side_effect
+        mock_is_merged.return_value = True
 
         repo = GitRepository()
         merged = repo.get_merged_branches("main")
@@ -406,8 +408,8 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
 
     @patch("gcm.subprocess.run")
     def test_run_git_error_handling_with_check_false(self, mock_subprocess):
-        """GIT-19: Error handling when check=False returns error object"""
-        from subprocess import CalledProcessError
+        """GIT-19: Error handling when check=False returns CompletedProcess with error state"""
+        from subprocess import CalledProcessError, CompletedProcess
 
         # Create a CalledProcessError
         error = CalledProcessError(1, ["git", "status"], stderr="Command failed")
@@ -431,9 +433,10 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
 
         repo = GitRepository()
 
-        # Should return the error object when check=False
+        # Should return CompletedProcess with non-zero returncode when check=False
         result = repo._run_git(["status"], check=False)
-        assert isinstance(result, CalledProcessError)
+        assert isinstance(result, CompletedProcess)
+        assert result.returncode == 1
 
     @patch("gcm.GitRepository._run_git")
     def test_get_current_branch(self, mock_run_git):
@@ -529,8 +532,9 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
         ]
         assert len(branch_calls) == 2
 
+    @patch("gcm.GitRepository.is_merged")
     @patch("gcm.GitRepository._run_git")
-    def test_get_remote_merged_branches(self, mock_run_git):
+    def test_get_remote_merged_branches(self, mock_run_git, mock_is_merged):
         """GIT-24: Get remote merged branches filters correctly"""
 
         def side_effect(args, **kwargs):
@@ -538,13 +542,14 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
                 result = Mock()
                 result.returncode = 0
                 return result
-            elif "branch" in args and "--merged" in args:
+            elif "branch" in args and "-r" in args:
                 result = Mock()
                 result.stdout = "  origin/feature1\n  origin/feature2\n  origin/main\n  other-remote/feature3\n"
                 return result
             return Mock()
 
         mock_run_git.side_effect = side_effect
+        mock_is_merged.return_value = True
 
         repo = GitRepository()
         branches = repo.get_remote_merged_branches("origin", "main")
@@ -728,6 +733,80 @@ upstream\tgit@github.com:upstream/repo.git (push)"""
         ]
         assert len(add_calls) == 1
         assert len(fetch_calls) == 1
+
+    @patch("gcm.GitRepository._run_git")
+    def test_is_merged_regular_merge(self, mock_run_git):
+        """GIT-36: is_merged detects regular merge (branch is ancestor of trunk)"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                return Mock(returncode=0)
+            elif "merge-base" in args and "--is-ancestor" in args:
+                return Mock(returncode=0)
+            return Mock(returncode=1)
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        assert repo.is_merged("feature", "main") is True
+
+    @patch("gcm.GitRepository._run_git")
+    def test_is_merged_rebase_merge(self, mock_run_git):
+        """GIT-37: is_merged detects rebase merge (all commits patch-equivalent)"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                return Mock(returncode=0)
+            elif "merge-base" in args and "--is-ancestor" in args:
+                return Mock(returncode=1)
+            elif "cherry" in args:
+                return Mock(returncode=0, stdout="- abc123\n- def456\n")
+            return Mock(returncode=1)
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        assert repo.is_merged("feature", "main") is True
+
+    @patch("gcm.GitRepository._run_git")
+    def test_is_merged_squash_merge(self, mock_run_git):
+        """GIT-38: is_merged detects squash merge (identical tree)"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                return Mock(returncode=0)
+            elif "merge-base" in args and "--is-ancestor" in args:
+                return Mock(returncode=1)
+            elif "cherry" in args:
+                return Mock(returncode=0, stdout="+ abc123\n")
+            elif "diff" in args and "--quiet" in args:
+                return Mock(returncode=0)
+            return Mock(returncode=1)
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        assert repo.is_merged("feature", "main") is True
+
+    @patch("gcm.GitRepository._run_git")
+    def test_is_merged_not_merged(self, mock_run_git):
+        """GIT-39: is_merged returns False when branch is not merged by any strategy"""
+
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                return Mock(returncode=0)
+            elif "merge-base" in args and "--is-ancestor" in args:
+                return Mock(returncode=1)
+            elif "cherry" in args:
+                return Mock(returncode=0, stdout="+ abc123\n")
+            elif "diff" in args and "--quiet" in args:
+                return Mock(returncode=1)
+            return Mock(returncode=1)
+
+        mock_run_git.side_effect = side_effect
+
+        repo = GitRepository()
+        assert repo.is_merged("feature", "main") is False
 
     @patch("gcm.GitRepository._run_git")
     def test_convert_origin_to_fork_url_https(self, mock_run_git):

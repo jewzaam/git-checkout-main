@@ -32,6 +32,7 @@ class TestGCMWorkflow:
     def test_origin_push_disabled_with_forks(self):
         """MAIN-05: Origin push is disabled when forks are detected"""
         config = Mock()
+        config.get_provider_names.return_value = ["github", "gitlab"]
         config.get_fork_remote.side_effect = lambda provider: {
             "github": "myuser",
             "gitlab": None,
@@ -42,12 +43,13 @@ class TestGCMWorkflow:
 
         remotes = {"origin": "upstream_url", "myuser": "fork_url"}
 
-        gcm._configure_origin_push(remotes, dry_run=False)
+        gcm._configure_origin_push(remotes, dryrun=False)
         repo.set_push_url.assert_called_once_with("origin", "no_push")
 
     def test_origin_push_not_disabled_without_forks(self):
         """MAIN-06: Origin push is not disabled when no forks are detected"""
         config = Mock()
+        config.get_provider_names.return_value = ["github", "gitlab"]
         config.get_fork_remote.return_value = None
 
         repo = Mock()
@@ -55,7 +57,7 @@ class TestGCMWorkflow:
 
         remotes = {"origin": "upstream_url"}
 
-        gcm._configure_origin_push(remotes, dry_run=False)
+        gcm._configure_origin_push(remotes, dryrun=False)
         repo.set_push_url.assert_not_called()
 
     def test_checkout_trunk_success(self):
@@ -66,7 +68,7 @@ class TestGCMWorkflow:
         repo.pull.return_value = True
 
         gcm = GCM(config, repo)
-        gcm._checkout_and_update_trunk("main", dry_run=False)
+        gcm._checkout_and_update_trunk("main", dryrun=False)
 
         repo.checkout_branch.assert_called_once_with("main")
         repo.pull.assert_called_once()
@@ -86,7 +88,7 @@ class TestGCMWorkflow:
         gcm = GCM(config, repo)
 
         with patch.object(gcm, "_should_reset", return_value=True):
-            gcm._checkout_and_update_trunk("main", dry_run=False)
+            gcm._checkout_and_update_trunk("main", dryrun=False)
             repo.hard_reset_and_clean.assert_called_once()
 
     def test_checkout_trunk_reset_declined(self):
@@ -101,12 +103,13 @@ class TestGCMWorkflow:
 
         with patch.object(gcm, "_should_reset", return_value=False):
             with pytest.raises(GitError):
-                gcm._checkout_and_update_trunk("main", dry_run=False)
+                gcm._checkout_and_update_trunk("main", dryrun=False)
 
     def test_branch_cleanup_merged_and_gone(self):
         """MAIN-10: Branch cleanup removes both merged and gone branches"""
         config = Mock()
-        config.config = {"behavior": {"parallel_operations": True}}
+        config.get_parallel_operations.return_value = True
+        config.get_provider_names.return_value = ["github", "gitlab"]
 
         repo = Mock()
         repo.get_merged_branches.return_value = ["feature-1", "feature-2"]
@@ -116,12 +119,12 @@ class TestGCMWorkflow:
         gcm = GCM(config, repo)
         remotes = {"origin": "upstream", "myuser": "fork"}
 
-        gcm._cleanup_branches("main", remotes, dry_run=False)
+        gcm._cleanup_branches("main", remotes, dryrun=False)
 
         # Should delete local branches (order doesn't matter)
-        called_args = repo.delete_branches.call_args[0]
-        assert set(called_args[0]) == {"feature-1", "feature-2", "old-feature"}
-        assert called_args[1] is True
+        called_args = repo.delete_branches.call_args
+        assert set(called_args[0][0]) == {"feature-1", "feature-2", "old-feature"}
+        assert called_args[1]["parallel"] is True
 
     def test_sync_to_forks_success(self):
         """MAIN-11: Fork synchronization pushes trunk to configured forks"""
@@ -134,7 +137,7 @@ class TestGCMWorkflow:
         gcm = GCM(config, repo)
         remotes = {"origin": "upstream", "myuser": "fork"}
 
-        gcm._sync_to_forks("github", remotes, "main", dry_run=False)
+        gcm._sync_to_forks("github", remotes, "main", dryrun=False)
         repo.push_branch.assert_called_once_with("myuser", "main")
 
     def test_sync_to_forks_no_remote(self):
@@ -146,13 +149,14 @@ class TestGCMWorkflow:
         gcm = GCM(config, repo)
         remotes = {"origin": "upstream"}  # No fork remote
 
-        gcm._sync_to_forks("github", remotes, "main", dry_run=False)
+        gcm._sync_to_forks("github", remotes, "main", dryrun=False)
         repo.push_branch.assert_not_called()
 
-    def test_dry_run_mode(self):
+    def test_dryrun_mode(self):
         """MAIN-13: Dry-run mode shows actions without executing them"""
         config = Mock()
-        config.config = {"behavior": {"parallel_operations": True}}
+        config.get_parallel_operations.return_value = True
+        config.get_provider_names.return_value = ["github", "gitlab"]
 
         config.get_username.return_value = None
         config.get_fork_remote.return_value = None
@@ -167,7 +171,7 @@ class TestGCMWorkflow:
         gcm = GCM(config, repo)
 
         # Should complete without errors and without calling destructive operations
-        result = gcm.run(dry_run=True)
+        result = gcm.run(dryrun=True)
         assert result == 0
 
         # Should not call actual git operations
@@ -189,7 +193,8 @@ class TestGCMWorkflow:
     def test_parallel_operations_configuration(self):
         """MAIN-15: Parallel operations are controlled by configuration"""
         config = Mock()
-        config.config = {"behavior": {"parallel_operations": False}}
+        config.get_parallel_operations.return_value = False
+        config.get_provider_names.return_value = ["github", "gitlab"]
 
         repo = Mock()
         repo.get_merged_branches.return_value = ["feature"]
@@ -198,17 +203,17 @@ class TestGCMWorkflow:
         gcm = GCM(config, repo)
         remotes = {"origin": "upstream"}
 
-        gcm._cleanup_branches("main", remotes, dry_run=False)
+        gcm._cleanup_branches("main", remotes, dryrun=False)
 
         # Should pass parallel_operations=False
-        repo.delete_branches.assert_called_with(["feature"], False)
+        repo.delete_branches.assert_called_with(["feature"], parallel=False)
 
     @patch("gcm.main")
     def test_command_line_interface(self, mock_main):
         """MAIN-16: Command line interface parses arguments correctly"""
         mock_main.return_value = 0
 
-        with patch("sys.argv", ["gcm.py", "-m", "--dry-run"]):
+        with patch("sys.argv", ["gcm.py", "-m", "--dryrun"]):
             # Import and test would happen here in a real CLI test
             pass
 
@@ -272,11 +277,11 @@ class TestGCMWorkflow:
         assert call_args[1]["level"] == mock_logging.INFO
 
     @patch("gcm.logging")
-    def test_setup_logging_custom_level(self, mock_logging):
-        """MAIN-20: Setup logging with custom level"""
+    def test_setup_logging_debug(self, mock_logging):
+        """MAIN-20: Setup logging with debug flag"""
         from gcm import setup_logging
 
-        setup_logging("DEBUG")
+        setup_logging(debug=True)
 
         mock_logging.basicConfig.assert_called_once()
         call_args = mock_logging.basicConfig.call_args
@@ -288,9 +293,8 @@ class TestGCMWorkflow:
             "gcm.py",
             "--config",
             "/path/to/config.yaml",
-            "--dry-run",
-            "--log-level",
-            "DEBUG",
+            "--dryrun",
+            "--debug",
         ],
     )
     @patch("gcm.GitRepository")
@@ -318,9 +322,11 @@ class TestGCMWorkflow:
 
         assert result == 0
         # Verify config was created with specified path
-        mock_config_class.assert_called_once_with(Path("/path/to/config.yaml"))
+        mock_config_class.assert_called_once_with(
+            config_path=Path("/path/to/config.yaml")
+        )
         # Verify GCM run was called with correct arguments
-        mock_gcm.run.assert_called_once_with(make_remotes=False, dry_run=True)
+        mock_gcm.run.assert_called_once_with(make_remotes=False, dryrun=True)
 
     def test_setup_fork_remotes_missing_config(self):
         """MAIN-26: Setup fork remotes with missing configuration"""
@@ -332,7 +338,7 @@ class TestGCMWorkflow:
         gcm = GCM(config, repo)
 
         # Should return early when username/fork_remote not configured
-        gcm._setup_fork_remotes("github", {}, dry_run=False)
+        gcm._setup_fork_remotes("github", {}, dryrun=False)
 
         config.get_username.assert_called_once_with("github")
         config.get_fork_remote.assert_called_once_with("github")
@@ -349,7 +355,7 @@ class TestGCMWorkflow:
         remotes = {"origin": "upstream", "testuser": "fork"}
 
         # Should not attempt to create when remote already exists
-        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+        gcm._setup_fork_remotes("github", remotes, dryrun=False)
 
         # Just verify the config methods were called
         config.get_username.assert_called_once_with("github")
@@ -367,7 +373,7 @@ class TestGCMWorkflow:
         remotes = {"origin": "upstream"}  # No fork remote exists
 
         # Should log that it would create the remote
-        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+        gcm._setup_fork_remotes("github", remotes, dryrun=False)
 
         config.get_username.assert_called_once_with("github")
         config.get_fork_remote.assert_called_once_with("github")
@@ -388,7 +394,7 @@ class TestGCMWorkflow:
         remotes = {"origin": "https://github.com/upstream/repo.git"}
 
         # Should create the remote
-        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+        gcm._setup_fork_remotes("github", remotes, dryrun=False)
 
         repo.convert_origin_to_fork_url.assert_called_once_with(
             "https://github.com/upstream/repo.git", "testuser"
@@ -397,7 +403,7 @@ class TestGCMWorkflow:
             "testuser", "git@github.com:testuser/repo.git"
         )
 
-    def test_setup_fork_remotes_dry_run_mode(self):
+    def test_setup_fork_remotes_dryrun_mode(self):
         """MAIN-30: Setup fork remotes in dry-run mode doesn't create remotes"""
         config = Mock()
         config.get_username.return_value = "testuser"
@@ -413,7 +419,7 @@ class TestGCMWorkflow:
         remotes = {"origin": "https://github.com/upstream/repo.git"}
 
         # Should NOT create the remote in dry-run mode
-        gcm._setup_fork_remotes("github", remotes, dry_run=True)
+        gcm._setup_fork_remotes("github", remotes, dryrun=True)
 
         repo.convert_origin_to_fork_url.assert_called_once_with(
             "https://github.com/upstream/repo.git", "testuser"
@@ -433,7 +439,7 @@ class TestGCMWorkflow:
         remotes = {}  # No origin remote
 
         # Should handle missing origin gracefully
-        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+        gcm._setup_fork_remotes("github", remotes, dryrun=False)
 
         repo.convert_origin_to_fork_url.assert_not_called()
         repo.add_remote.assert_not_called()
@@ -452,6 +458,6 @@ class TestGCMWorkflow:
         remotes = {"origin": "https://github.com/upstream/repo.git"}
 
         # Should handle errors gracefully without raising
-        gcm._setup_fork_remotes("github", remotes, dry_run=False)
+        gcm._setup_fork_remotes("github", remotes, dryrun=False)
 
         repo.add_remote.assert_not_called()

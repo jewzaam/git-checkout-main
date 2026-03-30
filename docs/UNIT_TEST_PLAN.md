@@ -16,7 +16,6 @@ This document maps 1:1 to unit tests in the codebase. Each test item corresponds
 | CONFIG-06 | Getting provider config returns correct values | |
 | CONFIG-07 | Getting config for unknown provider returns empty dict | |
 | CONFIG-08 | Config file discovery finds files in standard locations | |
-| CONFIG-09 | VPN command configuration works correctly | |
 | CONFIG-10 | Behavior configuration options work correctly | |
 
 ## GIT - Git Repository Operations Tests
@@ -26,7 +25,7 @@ This document maps 1:1 to unit tests in the codebase. Each test item corresponds
 | GIT-01 | Repository initialization succeeds in valid git repository | |
 | GIT-02 | Repository initialization fails in non-git directory | |
 | GIT-03 | Trunk branch detection works from origin/HEAD | |
-| GIT-04 | Trunk branch detection falls back to common names | |
+| GIT-04 | Trunk branch detection fails when origin/HEAD is not set | |
 | GIT-05 | Trunk branch detection fails when no common branches exist | |
 | GIT-06 | Remote detection parses git remote output correctly | |
 | GIT-07 | Provider detection identifies GitHub correctly | |
@@ -46,9 +45,6 @@ This document maps 1:1 to unit tests in the codebase. Each test item corresponds
 | Test ID | Description | Validated |
 |---------|-------------|-----------|
 | MAIN-01 | GCM initializes correctly with config and repository | |
-| MAIN-02 | VPN connection succeeds when command is configured | |
-| MAIN-03 | VPN connection failure is handled gracefully | |
-| MAIN-04 | VPN connection is skipped in dry-run mode | |
 | MAIN-05 | Origin push is disabled when forks are detected | |
 | MAIN-06 | Origin push is not disabled when no forks are detected | |
 | MAIN-07 | Trunk checkout and update succeeds normally | |

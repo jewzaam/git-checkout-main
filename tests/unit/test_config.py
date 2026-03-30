@@ -41,7 +41,7 @@ class TestGCMConfig:
             config_path = Path(f.name)
 
         try:
-            config = GCMConfig(config_path)
+            config = GCMConfig(config_path=config_path)
             assert config.get_username("github") == "testuser"
             assert config.get_fork_remote("github") == "testuser"
         finally:
@@ -67,7 +67,7 @@ class TestGCMConfig:
 
         try:
             with pytest.raises(ConfigError):
-                GCMConfig(config_path)
+                GCMConfig(config_path=config_path)
         finally:
             config_path.unlink()
 
@@ -80,7 +80,7 @@ class TestGCMConfig:
             config_path = Path(f.name)
 
         try:
-            config = GCMConfig(config_path)
+            config = GCMConfig(config_path=config_path)
             # Should have the override
             assert config.get_username("github") == "testuser"
             # Should preserve defaults for other providers
@@ -128,7 +128,7 @@ class TestGCMConfig:
             config_path = Path(f.name)
 
         try:
-            config = GCMConfig(config_path)
+            config = GCMConfig(config_path=config_path)
             assert config.config["behavior"]["confirm_destructive"] is False
             assert config.config["behavior"]["parallel_operations"] is False
         finally:
@@ -143,7 +143,7 @@ class TestGCMConfig:
             config_path = Path(f.name)
 
         try:
-            config = GCMConfig(config_path)
+            config = GCMConfig(config_path=config_path)
             username = config.get_username("github")
             assert username == "testuser"
         finally:
@@ -164,7 +164,7 @@ class TestGCMConfig:
             config_path = Path(f.name)
 
         try:
-            config = GCMConfig(config_path)
+            config = GCMConfig(config_path=config_path)
             fork_remote = config.get_fork_remote("github")
             assert fork_remote == "testuser"
         finally:
@@ -208,7 +208,7 @@ class TestGCMConfig:
             config_path = Path(f.name)
 
         try:
-            config = GCMConfig(config_path)
+            config = GCMConfig(config_path=config_path)
             # Should preserve default values while overlaying user config
             assert config.config["providers"]["github"]["username"] == "testuser"
             assert (
