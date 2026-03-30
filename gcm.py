@@ -275,15 +275,46 @@ class GitRepository:
         """Prune a single remote"""
         self._run_git(["remote", "prune", remote])
 
+    def is_merged(self, branch: str, trunk: str) -> bool:
+        """Check if a branch has been merged into trunk via any merge strategy.
+
+        Checks regular merge (ancestor), rebase merge (cherry/patch-equivalent),
+        and squash merge (identical tree).
+        """
+        # Regular merge: branch is an ancestor of trunk
+        result = self._run_git(
+            ["merge-base", "--is-ancestor", branch, trunk], check=False
+        )
+        if result.returncode == 0:
+            return True
+
+        # Rebase merge: all commits have patch-equivalent in trunk
+        result = self._run_git(["cherry", trunk, branch], check=False)
+        if result.returncode == 0:
+            unmerged = sum(
+                1 for line in result.stdout.strip().split("\n")
+                if line.startswith("+")
+            )
+            if unmerged == 0:
+                return True
+
+        # Squash merge: the branch tree is identical to trunk
+        result = self._run_git(["diff", "--quiet", trunk, branch, "--"], check=False)
+        if result.returncode == 0:
+            return True
+
+        return False
+
     def get_merged_branches(self, trunk_branch: str) -> List[str]:
-        """Get local branches that have been merged to trunk"""
-        result = self._run_git(["branch", "--merged", trunk_branch])
+        """Get local branches that have been merged to trunk via any strategy"""
+        result = self._run_git(["branch"])
         branches = []
 
         for line in result.stdout.strip().split("\n"):
             line = line.strip()
             if line and not line.startswith("*") and line != trunk_branch:
-                branches.append(line)
+                if self.is_merged(line, trunk_branch):
+                    branches.append(line)
 
         return branches
 
@@ -307,19 +338,20 @@ class GitRepository:
         )
 
     def _delete_branch(self, branch: str) -> None:
-        """Delete a single local branch"""
-        self._run_git(["branch", "-d", branch], check=False)
+        """Delete a single local branch (force, since rebase/squash merges aren't recognized by -d)"""
+        self._run_git(["branch", "-D", branch], check=False)
 
     def get_remote_merged_branches(self, remote: str, trunk_branch: str) -> List[str]:
-        """Get remote branches that have been merged to trunk"""
-        result = self._run_git(["branch", "-r", "--merged", trunk_branch])
+        """Get remote branches that have been merged to trunk via any strategy"""
+        result = self._run_git(["branch", "-r"])
         branches = []
 
         for line in result.stdout.strip().split("\n"):
             line = line.strip()
             if line.startswith(f"{remote}/") and not line.endswith(f"/{trunk_branch}"):
-                branch = line.replace(f"{remote}/", "")
-                branches.append(branch)
+                branch = line.replace(f"{remote}/", "", 1)
+                if self.is_merged(f"{remote}/{branch}", trunk_branch):
+                    branches.append(branch)
 
         return branches
 
