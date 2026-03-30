@@ -292,8 +292,7 @@ class GitRepository:
         result = self._run_git(["cherry", trunk, branch], check=False)
         if result.returncode == 0:
             unmerged = sum(
-                1 for line in result.stdout.strip().split("\n")
-                if line.startswith("+")
+                1 for line in result.stdout.strip().split("\n") if line.startswith("+")
             )
             if unmerged == 0:
                 return True
